@@ -12,16 +12,17 @@ export default function Salgsvilkar() {
       <h1>Salgsvilkår</h1>
 
       <p>
-        Disse salgsvilkårene gjelder kjøp av digitale skrapelodd og andre
-        produkter fra Bergenstjerne Fotballklubb.
+        Disse salgsvilkårene gjelder kjøp av digitale skrapelodd fra
+        Bergenstjerne FK.
       </p>
 
       <h2>Selger</h2>
 
       <p>
-        Bergenstjerne Fotballklubb<br />
-        Organisasjonsnummer: 932 365 472<br />
-        E-post: post@bergenstjerne.no
+        Bergenstjerne FK<br />
+        Bergen Stjerne Idrettslag<br />
+        Organisasjonsnummer: 934 990 730<br />
+        E-post: post@bergensi.no
       </p>
 
       <h2>Betaling</h2>
@@ -35,6 +36,14 @@ export default function Salgsvilkar() {
 
       <p>
         Digitale skrapelodd leveres umiddelbart etter gjennomført betaling.
+      </p>
+
+      <h2>Premieutlevering</h2>
+
+      <p>
+        Eventuelle premier utleveres i henhold til informasjon som gis ved
+        kjøpet eller etter avtale med Bergenstjerne FK. Vinneren kan bli bedt om
+        å dokumentere identitet før premie utleveres.
       </p>
 
       <h2>Angrerett</h2>
@@ -52,10 +61,19 @@ export default function Salgsvilkar() {
         brukes, vil kunden få nytt lodd eller refusjon.
       </p>
 
+      <h2>Personvern</h2>
+
+      <p>
+        Bergenstjerne FK lagrer kun opplysninger som er nødvendige for å
+        gjennomføre kjøpet, administrere loddsalget og utlevere premier.
+        Opplysningene deles ikke med uvedkommende.
+      </p>
+
       <h2>Kontakt</h2>
 
       <p>
-        E-post: post@bergenstjerne.no
+        Bergenstjerne FK<br />
+        E-post: post@bergensi.no
       </p>
     </main>
   );
