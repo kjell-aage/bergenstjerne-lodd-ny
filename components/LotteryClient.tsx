@@ -14,7 +14,7 @@ type Prize = {
 
 type Ticket = { id: string; symbols: string[]; prize: Prize | null };
 
-const GRASROT_URL = "https://www.norsk-tipping.no/grasrotandelen/din-mottaker/993068187";
+const GRASROT_URL = "https://www.norsk-tipping.no/grasrotandelen/mottaker/934990730?fromSearch=true";
 
 export default function LotteryClient({ initialPrizes }: { initialPrizes: Prize[] }) {
   const [count, setCount] = useState(10);
