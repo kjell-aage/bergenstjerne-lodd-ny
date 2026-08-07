@@ -10,23 +10,33 @@ function jsonError(message: string, status = 500) {
 }
 
 export async function GET(req: Request) {
-  if (!authorized(req)) return jsonError("Ikke tilgang.", 401);
+  if (!authorized(req)) {
+    return jsonError("Ikke tilgang.", 401);
+  }
 
   try {
     const { data, error } = await supabaseAdmin()
       .from("prizes")
       .select("*")
+      .eq("active", true)
       .order("sort_order");
 
-    if (error) return jsonError(error.message);
+    if (error) {
+      return jsonError(error.message);
+    }
+
     return NextResponse.json(data || []);
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Ukjent serverfeil");
+    return jsonError(
+      error instanceof Error ? error.message : "Ukjent serverfeil"
+    );
   }
 }
 
 export async function POST(req: Request) {
-  if (!authorized(req)) return jsonError("Ikke tilgang.", 401);
+  if (!authorized(req)) {
+    return jsonError("Ikke tilgang.", 401);
+  }
 
   try {
     const body = await req.json();
@@ -52,21 +62,30 @@ export async function POST(req: Request) {
       .select()
       .single();
 
-    if (error) return jsonError(error.message);
+    if (error) {
+      return jsonError(error.message);
+    }
+
     return NextResponse.json(data);
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Ukjent serverfeil");
+    return jsonError(
+      error instanceof Error ? error.message : "Ukjent serverfeil"
+    );
   }
 }
 
 export async function PATCH(req: Request) {
-  if (!authorized(req)) return jsonError("Ikke tilgang.", 401);
+  if (!authorized(req)) {
+    return jsonError("Ikke tilgang.", 401);
+  }
 
   try {
     const body = await req.json();
     const id = body?.id;
 
-    if (!id) return jsonError("Mangler premie-ID.", 400);
+    if (!id) {
+      return jsonError("Mangler premie-ID.", 400);
+    }
 
     const db = supabaseAdmin();
 
@@ -76,12 +95,18 @@ export async function PATCH(req: Request) {
       .eq("id", id)
       .maybeSingle();
 
-    if (readError) return jsonError(readError.message);
-    if (!currentPrize) return jsonError("Fant ikke premien.", 404);
+    if (readError) {
+      return jsonError(readError.message);
+    }
+
+    if (!currentPrize) {
+      return jsonError("Fant ikke premien.", 404);
+    }
 
     const oldTotal = Number(currentPrize.quantity_total || 0);
     const oldRemaining = Number(currentPrize.quantity_remaining || 0);
     const alreadyWon = Math.max(0, oldTotal - oldRemaining);
+
     const newTotal = Number(body.quantity_total);
     const newRemaining = Math.max(0, newTotal - alreadyWon);
 
@@ -106,30 +131,53 @@ export async function PATCH(req: Request) {
       .select()
       .maybeSingle();
 
-    if (error) return jsonError(error.message);
-    if (!data) return jsonError("Premien ble ikke oppdatert.", 404);
+    if (error) {
+      return jsonError(error.message);
+    }
+
+    if (!data) {
+      return jsonError("Premien ble ikke oppdatert.", 404);
+    }
 
     return NextResponse.json(data);
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Ukjent serverfeil");
+    return jsonError(
+      error instanceof Error ? error.message : "Ukjent serverfeil"
+    );
   }
 }
 
 export async function DELETE(req: Request) {
-  if (!authorized(req)) return jsonError("Ikke tilgang.", 401);
+  if (!authorized(req)) {
+    return jsonError("Ikke tilgang.", 401);
+  }
 
   try {
     const id = new URL(req.url).searchParams.get("id");
-    if (!id) return jsonError("Mangler premie-ID.", 400);
 
-    const { error } = await supabaseAdmin()
+    if (!id) {
+      return jsonError("Mangler premie-ID.", 400);
+    }
+
+    const { data, error } = await supabaseAdmin()
       .from("prizes")
-      .delete()
-      .eq("id", id);
+      .update({ active: false })
+      .eq("id", id)
+      .select()
+      .maybeSingle();
 
-    if (error) return jsonError(error.message);
+    if (error) {
+      return jsonError(error.message);
+    }
+
+    if (!data) {
+      return jsonError("Fant ikke premien.", 404);
+    }
+
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : "Ukjent serverfeil");
+    return jsonError(
+      error instanceof Error ? error.message : "Ukjent serverfeil"
+    );
   }
 }
