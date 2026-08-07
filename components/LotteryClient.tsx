@@ -20,14 +20,13 @@ export default function LotteryClient({ initialPrizes }: { initialPrizes: Prize[
   const [count, setCount] = useState(10);
   const [packageType, setPackageType] = useState<"regular"|"grass">("regular");
   const [grassConfirmed, setGrassConfirmed] = useState(false);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [claimMethod, setClaimMethod] = useState<""|"pickup"|"shipping">("");
   const [shipping, setShipping] = useState({name:"",address:"",postalCode:"",city:""});
   const [claimSaved, setClaimSaved] = useState(false);
+  const [manualPayment, setManualPayment] = useState<"idle"|"pay"|"done">("idle");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const ticketCount = packageType === "grass" ? 5 : count;
@@ -69,22 +68,11 @@ console.log("METODE:", claimMethod);
     setClaimSaved(true);
   }
 
-  async function buy() {
-    if (name.trim().length < 2) return alert("Skriv inn navn.");
-    if (!/^\d{8}$/.test(phone.replace(/\D/g, ""))) return alert("Skriv inn et gyldig telefonnummer.");
+  function buy() {
     if (packageType === "grass" && !grassConfirmed) {
       return alert("Bekreft at Bergenstjerne Fotballklubb er valgt som grasrotmottaker.");
     }
-    const res = await fetch("/api/vipps/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, phone, count: ticketCount, amount: price, packageType })
-    });
-    const data = await res.json();
-    if (!res.ok) return alert(data.error || "Kunne ikke opprette betalingen.");
-    console.log("VIPPS SVAR:", data);
-console.log("REDIRECT URL:", data.redirectUrl);
-    window.location.href = data.redirectUrl;
+    setManualPayment("pay");
   }
 
   useEffect(() => {
@@ -157,6 +145,42 @@ console.log("REDIRECT URL:", data.redirectUrl);
     setRevealed(true);
   }
 
+  if (manualPayment !== "idle") {
+    return <div className="modal"><div className="modalCard">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+        <b>Bergenstjerne FK</b>
+        <button className="small" onClick={()=>setManualPayment("idle")}>Lukk</button>
+      </div>
+
+      {manualPayment === "pay" ? <>
+        <div style={{textAlign:"center",padding:"18px 0 8px"}}>
+          <h2 style={{marginBottom:8}}>Betal med Vipps</h2>
+          <div style={{fontSize:34,fontWeight:900}}>{ticketCount} fysiske lodd</div>
+          <div style={{fontSize:42,fontWeight:900,marginTop:6}}>{price} kr</div>
+        </div>
+
+        <div className="panel" style={{textAlign:"center",marginTop:14}}>
+          <p style={{fontSize:18,marginTop:0}}>Åpne Vipps på telefonen din og betal</p>
+          <div style={{fontSize:32,fontWeight:900}}>{price} kr</div>
+          <p style={{fontSize:20,marginBottom:0}}>til <strong>Vipps #2005</strong></p>
+        </div>
+
+        <button className="vippsBtn" style={{marginTop:18}} onClick={()=>setManualPayment("done")}>Jeg har betalt</button>
+        <p className="vippsNote">Ha Vipps-kvitteringen klar. En frivillig kontrollerer betalingen før du får loddene.</p>
+      </> : <>
+        <div style={{textAlign:"center",padding:"24px 0"}}>
+          <div style={{fontSize:54}}>✅</div>
+          <h2>Vis Vipps-kvitteringen til en frivillig</h2>
+          <p style={{fontSize:18}}>Du skal motta</p>
+          <div style={{fontSize:40,fontWeight:900}}>{ticketCount} fysiske lodd</div>
+          <div style={{fontSize:24,fontWeight:800,marginTop:8}}>Betalt beløp: {price} kr</div>
+          <p style={{marginTop:18}}>La denne skjermen stå åpen sammen med Vipps-kvitteringen.</p>
+        </div>
+        <button className="btn primary wide" onClick={()=>setManualPayment("idle")}>Ferdig</button>
+      </>}
+    </div></div>;
+  }
+
   if (tickets.length) {
     const current = tickets[index];
     return <div className="modal"><div className="modalCard">
@@ -214,7 +238,7 @@ console.log("REDIRECT URL:", data.redirectUrl);
     <main>
       <section className="hero"><div className="container heroGrid">
         <div><span className="badge">Ingen skal stå utenfor</span><h1>Skrap. Vinn.<br/><em>Bygg fellesskap.</em></h1>
-          <p className="lead">Kjøp digitale skrapelodd og støtt Bergenstjerne Fotballklubb. Overskuddet går til sosiale aktiviteter, nødvendig utstyr og tiltak som styrker et trygt og inkluderende fellesskap for medlemmene våre.</p>
+          <p className="lead">Kjøp lodd og støtt Bergenstjerne Fotballklubb. Overskuddet går til sosiale aktiviteter, nødvendig utstyr og tiltak som styrker et trygt og inkluderende fellesskap for medlemmene våre.</p>
           <a className="btn primary" href="#kjop">Kjøp lodd nå</a>
         </div>
         <div className="logoCard"><img src="/bergenstjerne-logo.jpeg" alt="Bergenstjerne Fotballklubb"/></div>
@@ -228,7 +252,7 @@ console.log("REDIRECT URL:", data.redirectUrl);
         </div>
       </div></section>
 
-      <section id="kjop"><div className="container"><div className="title"><h2>Kjøp skrapelodd</h2><p>Vanlige lodd koster 20 kr per stykk.</p></div>
+      <section id="kjop"><div className="container"><div className="title"><h2>Kjøp lodd</h2><p>Vanlige lodd koster 20 kr per stykk. Du får fysiske lodd på standen.</p></div>
         <div className="buy">
           <div className="buyTabs">
             <button className={`buyTab ${packageType==="regular"?"active":""}`} onClick={()=>setPackageType("regular")}>Vanlig kjøp</button>
@@ -249,19 +273,15 @@ console.log("REDIRECT URL:", data.redirectUrl);
             </div>
           </div>
 
-          <div className="formGrid">
-            <label>Navn<input value={name} onChange={e=>setName(e.target.value)} placeholder="Fornavn og etternavn"/></label>
-            <label>Telefonnummer<input value={phone} onChange={e=>setPhone(e.target.value)} inputMode="numeric" placeholder="8 siffer"/></label>
-          </div>
           <div className="summary"><div><b>{ticketCount} lodd</b>{packageType==="grass"&&<div>Grasrotpakken</div>}</div><strong>{price} kr</strong></div>
-          <button className="vippsBtn" onClick={buy}>Betal med Vipps</button><p className="vippsNote">Du sendes videre til Vipps for å fullføre betalingen.</p>
+          <button className="vippsBtn" onClick={buy}>Fortsett til betaling</button><p className="vippsNote">Betal manuelt til Vipps #2005. Vis kvitteringen til en frivillig og få fysiske lodd.</p>
         </div>
       </div></section>
 
-      <section id="premier"><div className="container"><div className="title"><h2>Premier</h2><p>Premiebildene som legges inn i admin brukes også som symboler på skrapeloddet.</p></div>
+      <section id="premier"><div className="container"><div className="title"><h2>Premier</h2><p>Se noen av premiene du kan vinne.</p></div>
         <div className="prizeGrid">{initialPrizes.map(p=><div className="prizeCard" key={p.id}><img src={p.image_url} alt={p.name}/><h3>{p.name}</h3>{p.description&&<p>{p.description}</p>}</div>)}</div>
       </div></section>
     </main>
-    <footer><div className="container">Bergenstjerne Fotballklubb · Org.nr. 993 068 187 · Vipps #2005</div></footer>
+    <footer><div className="container">Bergenstjerne FK · Org.nr. 934 990 730 · Vipps #2005</div></footer>
   </>;
 }
