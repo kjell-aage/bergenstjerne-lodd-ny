@@ -19,7 +19,8 @@ type Ticket = {
 };
 
 const GRASROT_URL =
-  "https://www.norsk-tipping.no/grasrotandelen/mottaker/934990730?fromSearch=true";
+  "const GRASROT_URL =
+  "https://www.norsk-tipping.no/grasrotandelen/mottaker/993068187?fromSearch=true";";
 
 export default function LotteryClient({
   initialPrizes,
