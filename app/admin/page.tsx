@@ -56,6 +56,15 @@ type Campaign = {
   status: "draft" | "active" | "ended";
 };
 
+type CampaignMetrics = {
+  revenue_nok: number;
+  sold_tickets: number;
+  paid_orders: number;
+  remaining_tickets: number;
+  remaining_revenue_nok: number;
+  revenue_percent: number;
+};
+
 export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [loggedIn, setLoggedIn] = useState(false);
@@ -63,6 +72,8 @@ export default function AdminPage() {
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [winners, setWinners] = useState<Winner[]>([]);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [campaignMetrics, setCampaignMetrics] =
+    useState<CampaignMetrics | null>(null);
   const [savingCampaign, setSavingCampaign] = useState(false);
 
   const [message, setMessage] = useState("");
@@ -331,7 +342,8 @@ export default function AdminPage() {
 
     setPrizes(prizeData);
     setWinners(winnerData);
-    setCampaign(campaignData);
+    setCampaign(campaignData.campaign || campaignData);
+    setCampaignMetrics(campaignData.metrics || null);
     setLoggedIn(true);
 
     setMessage(
@@ -392,6 +404,9 @@ export default function AdminPage() {
       }
 
       setCampaign(result.campaign);
+      if (result.metrics) {
+        setCampaignMetrics(result.metrics);
+      }
       setMessage("Kampanjeinnstillingene er lagret.");
     } finally {
       setSavingCampaign(false);
@@ -1197,6 +1212,139 @@ export default function AdminPage() {
                   </div>
                 ))}
               </div>
+
+              {campaignMetrics && (
+                <div
+                  style={{
+                    marginTop: 18,
+                    padding: 18,
+                    borderRadius: 18,
+                    border: "1px solid #d7eaf5",
+                    background: "linear-gradient(135deg,#f8fcff,#eef8fe)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 14,
+                      alignItems: "flex-end",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 950,
+                          letterSpacing: 0.6,
+                          textTransform: "uppercase",
+                          color: "#2c8fc5",
+                        }}
+                      >
+                        Omsetning hittil
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 30,
+                          fontWeight: 950,
+                          color: "#143246",
+                          marginTop: 4,
+                        }}
+                      >
+                        {campaignMetrics.revenue_nok.toLocaleString("nb-NO")} kr
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit,minmax(125px,1fr))",
+                        gap: 10,
+                        flex: "1 1 460px",
+                      }}
+                    >
+                      {[
+                        [
+                          "Solgte lodd",
+                          `${campaignMetrics.sold_tickets.toLocaleString("nb-NO")} / ${campaign.max_tickets.toLocaleString("nb-NO")}`,
+                        ],
+                        [
+                          "Betalte kjøp",
+                          campaignMetrics.paid_orders.toLocaleString("nb-NO"),
+                        ],
+                        [
+                          "Gjenstår til maks",
+                          `${campaignMetrics.remaining_revenue_nok.toLocaleString("nb-NO")} kr`,
+                        ],
+                      ].map(([label, value]) => (
+                        <div
+                          key={String(label)}
+                          style={{
+                            background: "#fff",
+                            border: "1px solid #e0edf5",
+                            borderRadius: 14,
+                            padding: 12,
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 900,
+                              color: "#617988",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            {label}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 17,
+                              fontWeight: 950,
+                              marginTop: 4,
+                            }}
+                          >
+                            {value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      height: 12,
+                      background: "#dcecf5",
+                      borderRadius: 999,
+                      overflow: "hidden",
+                      marginTop: 16,
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${Math.min(100, Math.max(0, campaignMetrics.revenue_percent))}%`,
+                        background: "linear-gradient(90deg,#2c8fc5,#1f9d67)",
+                        borderRadius: 999,
+                      }}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 8,
+                      color: "#617988",
+                      fontSize: 13,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {campaignMetrics.revenue_percent.toLocaleString("nb-NO", {
+                      minimumFractionDigits: 1,
+                      maximumFractionDigits: 1,
+                    })} % av maksimal omsetning
+                  </div>
+                </div>
+              )}
 
               <div
                 style={{
