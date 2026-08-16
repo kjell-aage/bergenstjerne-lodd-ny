@@ -55,7 +55,7 @@ export default function LotteryClient({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const ticketCount = packageType === "grass" ? 5 : count;
-  const price = packageType === "grass" ? 60 : count * 20;
+  const price = packageType === "grass" ? 75 : count * 25;
 
   useEffect(() => {
     const stored = sessionStorage.getItem("bst_tickets");
@@ -874,66 +874,6 @@ export default function LotteryClient({
           </div>
         </section>
 
-        <section>
-          <div className="container">
-            <div className="title">
-              <h2>
-                Din støtte gjør en
-                forskjell
-              </h2>
-            </div>
-
-            <div className="purposeGrid">
-              <div className="purposeCard">
-                <div className="purposeIcon">
-                  🎉
-                </div>
-
-                <h3>
-                  Sosiale aktiviteter
-                </h3>
-
-                <p>
-                  Vi skaper gode
-                  opplevelser og minner
-                  sammen.
-                </p>
-              </div>
-
-              <div className="purposeCard">
-                <div className="purposeIcon">
-                  ⚽
-                </div>
-
-                <h3>Utstyr</h3>
-
-                <p>
-                  Loddsalget bidrar til
-                  nødvendig sports- og
-                  aktivitetsutstyr.
-                </p>
-              </div>
-
-              <div className="purposeCard">
-                <div className="purposeIcon">
-                  ❤️
-                </div>
-
-                <h3>
-                  Fellesskap
-                </h3>
-
-                <p>
-                  Vi bygger et
-                  inkluderende miljø der
-                  alle kan delta og
-                  kjenne tilhørighet.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
         <section id="kjop">
           <div className="container">
             <div className="title">
@@ -943,7 +883,7 @@ export default function LotteryClient({
               </h2>
 
               <p>
-                Vanlige lodd koster 20
+                Vanlige lodd koster 25
                 kr per stykk. Etter
                 godkjent Vipps-betaling
                 får du loddene direkte
@@ -1013,7 +953,7 @@ export default function LotteryClient({
                         </strong>
 
                         <span>
-                          {n * 20} kr
+                          {n * 25} kr
                         </span>
                       </button>
                     ),
@@ -1044,7 +984,7 @@ export default function LotteryClient({
                     </strong>
 
                     <span>
-                      {count * 20} kr
+                      {count * 25} kr
                     </span>
                   </div>
 
@@ -1075,7 +1015,7 @@ export default function LotteryClient({
 
                   <div className="offer">
                     5 lodd – betal kun
-                    60 kr
+                    75 kr
                   </div>
 
                   <p>
@@ -1188,6 +1128,35 @@ export default function LotteryClient({
                 først når betalingen er
                 godkjent.
               </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="supportSection">
+          <div className="container">
+            <div className="supportCard">
+              <div className="supportHeart">💙</div>
+
+              <div className="supportContent">
+                <h2>Dette støtter du</h2>
+
+                <p className="supportIntro">
+                  Bergenstjerne Fotballklubb tilbyr tilrettelagt fotball for
+                  barn, ungdom og voksne.
+                </p>
+
+                <p>
+                  Hos oss handler fotball om <strong>mestring, vennskap,
+                  aktivitet og tilhørighet</strong>. Inntektene fra loddsalget
+                  går direkte tilbake til spillerne og bidrar til utstyr,
+                  cuper, turneringer, reiser og sosiale aktiviteter.
+                </p>
+
+                <p className="supportClosing">
+                  Ditt bidrag gjør det mulig for flere å oppleve fotballglede
+                  og fellesskap. ⚽💙
+                </p>
+              </div>
             </div>
           </div>
         </section>
