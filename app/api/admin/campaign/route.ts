@@ -47,6 +47,7 @@ async function getMetrics(db: ReturnType<typeof supabaseAdmin>, campaign: any) {
   const maxRevenue =
     Number(campaign.ticket_price || 0) *
     Number(campaign.max_tickets || 0);
+  const goalAmount = Math.max(0, Number(campaign.goal_amount || 0));
 
   return {
     revenue_nok: revenueNok,
@@ -63,6 +64,11 @@ async function getMetrics(db: ReturnType<typeof supabaseAdmin>, campaign: any) {
     revenue_percent:
       maxRevenue > 0
         ? (revenueNok / maxRevenue) * 100
+        : 0,
+    goal_remaining_nok: Math.max(0, goalAmount - revenueNok),
+    goal_percent:
+      goalAmount > 0
+        ? (revenueNok / goalAmount) * 100
         : 0,
   };
 }
@@ -141,6 +147,30 @@ export async function PATCH(request: Request) {
     );
   }
 
+  const goalAmount = Number(body.goal_amount);
+  const organizationName = String(body.organization_name || "").trim();
+
+  if (!Number.isFinite(goalAmount) || goalAmount <= 0 || goalAmount > 200000) {
+    return NextResponse.json(
+      { error: "Kampanjemålet må være mellom 1 og 200 000 kr." },
+      { status: 400 },
+    );
+  }
+
+  if (!organizationName) {
+    return NextResponse.json(
+      { error: "Organisasjonsnavn må fylles ut." },
+      { status: 400 },
+    );
+  }
+
+  if (ticketPrice * maxTickets > 200000) {
+    return NextResponse.json(
+      { error: "Pris per lodd × maks antall lodd kan ikke overstige 200 000 kr i denne versjonen." },
+      { status: 400 },
+    );
+  }
+
   const allowedStatuses = ["draft", "active", "ended"];
 
   if (!allowedStatuses.includes(body.status)) {
@@ -159,6 +189,10 @@ export async function PATCH(request: Request) {
         name: String(body.name || "").trim(),
         ticket_price: ticketPrice,
         max_tickets: maxTickets,
+        goal_amount: goalAmount,
+        organization_name: organizationName,
+        team_name: String(body.team_name || "").trim() || null,
+        purpose_text: String(body.purpose_text || "").trim() || null,
         start_date: body.start_date || null,
         end_date: body.end_date || null,
         status: body.status,

@@ -51,6 +51,10 @@ type Campaign = {
   name: string;
   ticket_price: number;
   max_tickets: number;
+  goal_amount: number;
+  organization_name: string;
+  team_name?: string | null;
+  purpose_text?: string | null;
   start_date?: string | null;
   end_date?: string | null;
   status: "draft" | "active" | "ended";
@@ -63,6 +67,8 @@ type CampaignMetrics = {
   remaining_tickets: number;
   remaining_revenue_nok: number;
   revenue_percent: number;
+  goal_remaining_nok: number;
+  goal_percent: number;
 };
 
 export default function AdminPage() {
@@ -365,6 +371,21 @@ export default function AdminPage() {
 
     if (Number(campaign.max_tickets) <= 0) {
       setMessage("Antall lodd må være høyere enn 0.");
+      return;
+    }
+
+    if (!campaign.organization_name?.trim()) {
+      setMessage("Organisasjonsnavn må fylles ut.");
+      return;
+    }
+
+    if (Number(campaign.goal_amount) <= 0) {
+      setMessage("Kampanjemålet må være høyere enn 0 kr.");
+      return;
+    }
+
+    if (Number(campaign.goal_amount) > 200000) {
+      setMessage("Kampanjemålet kan ikke være høyere enn 200 000 kr i denne versjonen.");
       return;
     }
 
@@ -1140,6 +1161,97 @@ export default function AdminPage() {
                     }
                   />
                 </label>
+
+                <label>
+                  Kampanjemål i kroner
+                  <input
+                    type="number"
+                    min="1"
+                    max="200000"
+                    value={campaign.goal_amount || 0}
+                    onChange={(event) =>
+                      setCampaign({
+                        ...campaign,
+                        goal_amount: Number(event.target.value),
+                      })
+                    }
+                  />
+                </label>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 20,
+                  padding: 18,
+                  borderRadius: 18,
+                  border: "1px solid #d9eaf4",
+                  background: "#fbfdff",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 950,
+                    letterSpacing: 0.7,
+                    textTransform: "uppercase",
+                    color: "#2c8fc5",
+                    marginBottom: 12,
+                  }}
+                >
+                  Hvem støtter kjøperen?
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit,minmax(220px,1fr))",
+                    gap: 12,
+                  }}
+                >
+                  <label>
+                    Organisasjon / klubb
+                    <input
+                      value={campaign.organization_name || ""}
+                      onChange={(event) =>
+                        setCampaign({
+                          ...campaign,
+                          organization_name: event.target.value,
+                        })
+                      }
+                      placeholder="F.eks. Bergenstjerne Fotballklubb"
+                    />
+                  </label>
+
+                  <label>
+                    Lag / gruppe (valgfritt)
+                    <input
+                      value={campaign.team_name || ""}
+                      onChange={(event) =>
+                        setCampaign({
+                          ...campaign,
+                          team_name: event.target.value || null,
+                        })
+                      }
+                      placeholder="F.eks. Jenter 13"
+                    />
+                  </label>
+                </div>
+
+                <label style={{ display: "block", marginTop: 12 }}>
+                  Kort tekst om formålet
+                  <textarea
+                    value={campaign.purpose_text || ""}
+                    onChange={(event) =>
+                      setCampaign({
+                        ...campaign,
+                        purpose_text: event.target.value,
+                      })
+                    }
+                    placeholder="Kort forklaring som senere vises på kjøpssiden"
+                    style={{ minHeight: 90 }}
+                  />
+                </label>
               </div>
 
               <div
@@ -1155,6 +1267,10 @@ export default function AdminPage() {
                   [
                     "Maks omsetning",
                     `${campaignPlan.maxRevenue.toLocaleString("nb-NO")} kr`,
+                  ],
+                  [
+                    "Kampanjemål",
+                    `${Number(campaign.goal_amount || 0).toLocaleString("nb-NO")} kr`,
                   ],
                   [
                     "Premier totalt",
@@ -1274,8 +1390,8 @@ export default function AdminPage() {
                           campaignMetrics.paid_orders.toLocaleString("nb-NO"),
                         ],
                         [
-                          "Gjenstår til maks",
-                          `${campaignMetrics.remaining_revenue_nok.toLocaleString("nb-NO")} kr`,
+                          "Gjenstår til mål",
+                          `${campaignMetrics.goal_remaining_nok.toLocaleString("nb-NO")} kr`,
                         ],
                       ].map(([label, value]) => (
                         <div
@@ -1323,7 +1439,7 @@ export default function AdminPage() {
                     <div
                       style={{
                         height: "100%",
-                        width: `${Math.min(100, Math.max(0, campaignMetrics.revenue_percent))}%`,
+                        width: `${Math.min(100, Math.max(0, campaignMetrics.goal_percent))}%`,
                         background: "linear-gradient(90deg,#2c8fc5,#1f9d67)",
                         borderRadius: 999,
                       }}
@@ -1338,10 +1454,10 @@ export default function AdminPage() {
                       fontWeight: 800,
                     }}
                   >
-                    {campaignMetrics.revenue_percent.toLocaleString("nb-NO", {
+                    {campaignMetrics.goal_percent.toLocaleString("nb-NO", {
                       minimumFractionDigits: 1,
                       maximumFractionDigits: 1,
-                    })} % av maksimal omsetning
+                    })} % av kampanjemålet
                   </div>
                 </div>
               )}
