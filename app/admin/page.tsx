@@ -46,12 +46,24 @@ type WinnerFilter =
   | "pickup"
   | "processed";
 
+type Campaign = {
+  id: string;
+  name: string;
+  ticket_price: number;
+  max_tickets: number;
+  start_date?: string | null;
+  end_date?: string | null;
+  status: "draft" | "active" | "ended";
+};
+
 export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [loggedIn, setLoggedIn] = useState(false);
 
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [winners, setWinners] = useState<Winner[]>([]);
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [savingCampaign, setSavingCampaign] = useState(false);
 
   const [message, setMessage] = useState("");
 
@@ -140,6 +152,53 @@ export default function AdminPage() {
       ),
     };
   }, [winners, prizes]);
+
+  const campaignPlan = useMemo(() => {
+    const maxTickets = Math.max(0, Number(campaign?.max_tickets || 0));
+    const ticketPrice = Math.max(0, Number(campaign?.ticket_price || 0));
+
+    const activePrizes = prizes.filter((prize) => prize.active !== false);
+    const totalPrizes = activePrizes.reduce(
+      (sum, prize) =>
+        sum +
+        Number(
+          prize.quantity_total ??
+            prize.quantity_remaining ??
+            0,
+        ),
+      0,
+    );
+
+    const totalPrizeValue = activePrizes.reduce(
+      (sum, prize) =>
+        sum +
+        Number(prize.value_nok || 0) *
+          Number(
+            prize.quantity_total ??
+              prize.quantity_remaining ??
+              0,
+          ),
+      0,
+    );
+
+    const winChance =
+      maxTickets > 0
+        ? (totalPrizes / maxTickets) * 100
+        : 0;
+
+    const oneIn =
+      totalPrizes > 0 && maxTickets > 0
+        ? maxTickets / totalPrizes
+        : 0;
+
+    return {
+      maxRevenue: ticketPrice * maxTickets,
+      totalPrizes,
+      totalPrizeValue,
+      winChance,
+      oneIn,
+    };
+  }, [campaign, prizes]);
 
   const filteredWinners = useMemo(() => {
     let result = [...winners];
@@ -249,8 +308,30 @@ export default function AdminPage() {
       return false;
     }
 
+    const campaignResponse = await fetch(
+      "/api/admin/campaign",
+      {
+        headers: {
+          "x-admin-password": password,
+        },
+      },
+    );
+
+    const campaignData =
+      await campaignResponse.json();
+
+    if (!campaignResponse.ok) {
+      setLoggedIn(false);
+      setMessage(
+        campaignData.error ||
+          "Kunne ikke hente kampanjeinnstillinger",
+      );
+      return false;
+    }
+
     setPrizes(prizeData);
     setWinners(winnerData);
+    setCampaign(campaignData);
     setLoggedIn(true);
 
     setMessage(
@@ -260,6 +341,61 @@ export default function AdminPage() {
     );
 
     return true;
+  }
+
+  async function saveCampaign() {
+    if (!campaign || savingCampaign) return;
+
+    if (Number(campaign.ticket_price) <= 0) {
+      setMessage("Loddprisen må være høyere enn 0 kr.");
+      return;
+    }
+
+    if (Number(campaign.max_tickets) <= 0) {
+      setMessage("Antall lodd må være høyere enn 0.");
+      return;
+    }
+
+    if (
+      campaign.start_date &&
+      campaign.end_date &&
+      campaign.end_date < campaign.start_date
+    ) {
+      setMessage("Sluttdato kan ikke være før startdato.");
+      return;
+    }
+
+    setSavingCampaign(true);
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        "/api/admin/campaign",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-password": password,
+          },
+          body: JSON.stringify(campaign),
+        },
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setMessage(
+          result.error ||
+            "Kunne ikke lagre kampanjeinnstillingene",
+        );
+        return;
+      }
+
+      setCampaign(result.campaign);
+      setMessage("Kampanjeinnstillingene er lagret.");
+    } finally {
+      setSavingCampaign(false);
+    }
   }
 
   async function updateStatus(
@@ -821,6 +957,281 @@ export default function AdminPage() {
         </div>
       ) : (
         <>
+          {campaign && (
+            <div
+              className="panel"
+              style={{
+                marginBottom: 20,
+                padding: 24,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  alignItems: "flex-start",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 950,
+                      letterSpacing: 0.8,
+                      textTransform: "uppercase",
+                      color: "#2c8fc5",
+                    }}
+                  >
+                    Aktiv kampanje
+                  </div>
+                  <h2 style={{ margin: "5px 0 4px" }}>
+                    Kampanjeinnstillinger
+                  </h2>
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#617988",
+                    }}
+                  >
+                    Styr pris, antall lodd, salgsperiode og status.
+                  </p>
+                </div>
+
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "8px 12px",
+                    borderRadius: 999,
+                    fontWeight: 900,
+                    fontSize: 13,
+                    color:
+                      campaign.status === "active"
+                        ? "#166534"
+                        : campaign.status === "ended"
+                          ? "#475569"
+                          : "#92400e",
+                    background:
+                      campaign.status === "active"
+                        ? "#dcfce7"
+                        : campaign.status === "ended"
+                          ? "#e2e8f0"
+                          : "#fef3c7",
+                  }}
+                >
+                  {campaign.status === "active"
+                    ? "Aktiv"
+                    : campaign.status === "ended"
+                      ? "Avsluttet"
+                      : "Kladd"}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit,minmax(180px,1fr))",
+                  gap: 12,
+                  marginTop: 22,
+                }}
+              >
+                <label>
+                  Kampanjenavn
+                  <input
+                    value={campaign.name}
+                    onChange={(event) =>
+                      setCampaign({
+                        ...campaign,
+                        name: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+
+                <label>
+                  Pris per lodd
+                  <input
+                    type="number"
+                    min="1"
+                    value={campaign.ticket_price}
+                    onChange={(event) =>
+                      setCampaign({
+                        ...campaign,
+                        ticket_price: Number(event.target.value),
+                      })
+                    }
+                  />
+                </label>
+
+                <label>
+                  Maks antall lodd
+                  <input
+                    type="number"
+                    min="1"
+                    value={campaign.max_tickets}
+                    onChange={(event) =>
+                      setCampaign({
+                        ...campaign,
+                        max_tickets: Number(event.target.value),
+                      })
+                    }
+                  />
+                </label>
+
+                <label>
+                  Status
+                  <select
+                    value={campaign.status}
+                    onChange={(event) =>
+                      setCampaign({
+                        ...campaign,
+                        status: event.target.value as Campaign["status"],
+                      })
+                    }
+                  >
+                    <option value="draft">Kladd</option>
+                    <option value="active">Aktiv</option>
+                    <option value="ended">Avsluttet</option>
+                  </select>
+                </label>
+
+                <label>
+                  Startdato
+                  <input
+                    type="date"
+                    value={campaign.start_date || ""}
+                    onChange={(event) =>
+                      setCampaign({
+                        ...campaign,
+                        start_date: event.target.value || null,
+                      })
+                    }
+                  />
+                </label>
+
+                <label>
+                  Sluttdato
+                  <input
+                    type="date"
+                    value={campaign.end_date || ""}
+                    onChange={(event) =>
+                      setCampaign({
+                        ...campaign,
+                        end_date: event.target.value || null,
+                      })
+                    }
+                  />
+                </label>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit,minmax(150px,1fr))",
+                  gap: 10,
+                  marginTop: 22,
+                }}
+              >
+                {[
+                  [
+                    "Maks omsetning",
+                    `${campaignPlan.maxRevenue.toLocaleString("nb-NO")} kr`,
+                  ],
+                  [
+                    "Premier totalt",
+                    campaignPlan.totalPrizes.toLocaleString("nb-NO"),
+                  ],
+                  [
+                    "Samlet premieverdi",
+                    `${campaignPlan.totalPrizeValue.toLocaleString("nb-NO")} kr`,
+                  ],
+                  [
+                    "Beregnet vinnersjanse",
+                    `${campaignPlan.winChance.toLocaleString("nb-NO", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })} %`,
+                  ],
+                  [
+                    "Omtrent",
+                    campaignPlan.oneIn > 0
+                      ? `1 gevinst per ${Math.round(
+                          campaignPlan.oneIn,
+                        ).toLocaleString("nb-NO")} lodd`
+                      : "Legg inn premier",
+                  ],
+                ].map(([label, value]) => (
+                  <div
+                    key={String(label)}
+                    style={{
+                      background: "#f5fafe",
+                      border: "1px solid #e0edf5",
+                      borderRadius: 16,
+                      padding: 14,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 900,
+                        textTransform: "uppercase",
+                        color: "#617988",
+                      }}
+                    >
+                      {label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 20,
+                        fontWeight: 950,
+                        color: "#143246",
+                        marginTop: 5,
+                      }}
+                    >
+                      {value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  marginTop: 20,
+                }}
+              >
+                <div
+                  style={{
+                    color: "#617988",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Vinnersjansen beregnes automatisk fra antall premier og
+                  maks antall lodd.
+                </div>
+
+                <button
+                  className="btn primary"
+                  onClick={saveCampaign}
+                  disabled={savingCampaign}
+                >
+                  {savingCampaign
+                    ? "Lagrer..."
+                    : "Lagre kampanje"}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div
             style={{
               display: "grid",
