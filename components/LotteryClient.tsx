@@ -23,8 +23,12 @@ const GRASROT_URL =
 
 export default function LotteryClient({
   initialPrizes,
+  campaignId,
+  ticketPrice,
 }: {
   initialPrizes: Prize[];
+  campaignId: string;
+  ticketPrice: number;
 }) {
   const [count, setCount] = useState(10);
   const [packageType, setPackageType] =
@@ -55,7 +59,10 @@ export default function LotteryClient({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const ticketCount = packageType === "grass" ? 5 : count;
-  const price = packageType === "grass" ? 75 : count * 25;
+  const price =
+    packageType === "grass"
+      ? 75
+      : count * ticketPrice;
 
   useEffect(() => {
     const stored = sessionStorage.getItem("bst_tickets");
@@ -139,6 +146,7 @@ export default function LotteryClient({
           count: ticketCount,
           amount: price,
           packageType,
+          campaignId,
         }),
       });
 
@@ -883,7 +891,7 @@ export default function LotteryClient({
               </h2>
 
               <p>
-                Vanlige lodd koster 25
+                Vanlige lodd koster {ticketPrice}
                 kr per stykk. Etter
                 godkjent Vipps-betaling
                 får du loddene direkte
@@ -953,7 +961,7 @@ export default function LotteryClient({
                         </strong>
 
                         <span>
-                          {n * 25} kr
+                          {n * ticketPrice} kr
                         </span>
                       </button>
                     ),
@@ -984,7 +992,7 @@ export default function LotteryClient({
                     </strong>
 
                     <span>
-                      {count * 25} kr
+                      {count * ticketPrice} kr
                     </span>
                   </div>
 
