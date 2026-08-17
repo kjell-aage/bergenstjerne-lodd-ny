@@ -1,1670 +1,476 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useSearchParams } from "next/navigation";
 
 type Prize = {
-  id: string;
-  name: string;
-  image_url: string;
-  quantity_remaining: number;
-  win_chance_percent: number;
+  id?: string;
+  name?: string;
+  image_url?: string;
   description?: string;
   value_nok?: number;
   is_consolation?: boolean;
-  quantity_total?: number;
-  sort_order?: number;
-  active?: boolean;
-  level?: string;
 };
 
-type Winner = {
+type Ticket = {
   id: string;
-  ticket_number?: string;
-  fulfillment_status?: string | null;
-  fulfillment_method?: string | null;
-
-  shipping_name?: string | null;
-  shipping_address?: string | null;
-  shipping_postal_code?: string | null;
-  shipping_city?: string | null;
-
-  claimed_at?: string | null;
-
-  prizes?: {
-    name?: string;
-  } | null;
-
-  orders?: {
-    customer_name?: string;
-    phone?: string;
-  } | null;
+  symbols: string[];
+  prize: Prize | null;
 };
 
-type WinnerFilter =
-  | "pending"
-  | "shipping"
-  | "pickup"
-  | "processed";
+type ApiResult = {
+  status?: string;
+  tickets?: Ticket[];
+  error?: string;
+};
 
-export default function AdminPage() {
-  const [password, setPassword] = useState("");
-  const [loggedIn, setLoggedIn] = useState(false);
+function ScratchTicket({
+  ticket,
+  number,
+}: {
+  ticket: Ticket;
+  number: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingRef = useRef(false);
+  const [revealed, setRevealed] = useState(false);
 
-  const [prizes, setPrizes] = useState<Prize[]>([]);
-  const [winners, setWinners] = useState<Winner[]>([]);
+  const reveal = useCallback(() => {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
 
-  const [message, setMessage] = useState("");
+    if (canvas && context) {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+    }
 
-  const [updatingWinnerId, setUpdatingWinnerId] =
-    useState<string | null>(null);
+    setRevealed(true);
+  }, []);
 
-  const [editingPrizeId, setEditingPrizeId] =
-    useState<string | null>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
 
-  const [winnerFilter, setWinnerFilter] =
-    useState<WinnerFilter>("pending");
+    if (!canvas) return;
 
-  const [winnerSearch, setWinnerSearch] = useState("");
+    const context = canvas.getContext("2d");
 
-  const [selectedWinner, setSelectedWinner] =
-    useState<Winner | null>(null);
+    if (!context) return;
 
-  const [form, setForm] = useState({
-    name: "",
-    description: "",
-    value_nok: 0,
-    quantity_total: 1,
-    win_chance_percent: 1,
-    sort_order: 1,
-    active: true,
-    is_consolation: false,
-    image_url: "",
-    level: "Premie",
-  });
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const ratio = window.devicePixelRatio || 1;
 
-  function isProcessed(winner: Winner) {
-    const status = (
-      winner.fulfillment_status || ""
-    ).toLowerCase();
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    context.scale(ratio, ratio);
 
-    return [
-      "fulfilled",
-      "delivered",
-      "utlevert",
-      "collected",
-      "shipped",
-      "sent",
-      "sendt",
-    ].includes(status);
+    const gradient = context.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, "#d8dde2");
+    gradient.addColorStop(0.5, "#98a3ad");
+    gradient.addColorStop(1, "#d8dde2");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, width, height);
+
+    context.fillStyle = "#143246";
+    context.font = "700 22px Arial";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText("SKRAP HER", width / 2, height / 2 - 12);
+    context.font = "15px Arial";
+    context.fillText("Finn tre like symboler", width / 2, height / 2 + 20);
+  }, []);
+
+  function scratch(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current || revealed) return;
+
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+
+    if (!canvas || !context) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    context.save();
+    context.globalCompositeOperation = "destination-out";
+    context.beginPath();
+    context.arc(x, y, 34, 0, Math.PI * 2);
+    context.fill();
+    context.restore();
   }
-
-  function methodText(method?: string | null) {
-    const value = (method || "").toLowerCase();
-
-    if (value === "shipping") return "Skal sendes";
-    if (value === "pickup") return "Skal hentes";
-
-    return "Ikke valgt";
-  }
-
-  const statistics = useMemo(() => {
-    const pending = winners.filter(
-      (winner) => !isProcessed(winner),
-    );
-
-    const shipping = pending.filter(
-      (winner) =>
-        winner.fulfillment_method === "shipping",
-    );
-
-    const pickup = pending.filter(
-      (winner) =>
-        winner.fulfillment_method === "pickup",
-    );
-
-    const processed = winners.filter(isProcessed);
-
-    return {
-      winners: winners.length,
-      pending: pending.length,
-      shipping: shipping.length,
-      pickup: pickup.length,
-      processed: processed.length,
-      prizesRemaining: prizes.reduce(
-        (sum, prize) =>
-          sum +
-          Number(
-            prize.quantity_remaining || 0,
-          ),
-        0,
-      ),
-    };
-  }, [winners, prizes]);
-
-  const filteredWinners = useMemo(() => {
-    let result = [...winners];
-
-    if (winnerFilter === "pending") {
-      result = result.filter(
-        (winner) => !isProcessed(winner),
-      );
-    }
-
-    if (winnerFilter === "shipping") {
-      result = result.filter(
-        (winner) =>
-          !isProcessed(winner) &&
-          winner.fulfillment_method ===
-            "shipping",
-      );
-    }
-
-    if (winnerFilter === "pickup") {
-      result = result.filter(
-        (winner) =>
-          !isProcessed(winner) &&
-          winner.fulfillment_method ===
-            "pickup",
-      );
-    }
-
-    if (winnerFilter === "processed") {
-      result = result.filter(isProcessed);
-    }
-
-    const search =
-      winnerSearch.trim().toLowerCase();
-
-    if (search) {
-      result = result.filter((winner) => {
-        const values = [
-          winner.orders?.customer_name,
-          winner.orders?.phone,
-          winner.shipping_name,
-          winner.shipping_address,
-          winner.shipping_postal_code,
-          winner.shipping_city,
-          winner.ticket_number,
-          winner.prizes?.name,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-
-        return values.includes(search);
-      });
-    }
-
-    return result;
-  }, [
-    winners,
-    winnerFilter,
-    winnerSearch,
-  ]);
-
-  async function load(
-    showSuccessMessage = false,
-  ) {
-    const prizeResponse = await fetch(
-      "/api/admin/prizes",
-      {
-        headers: {
-          "x-admin-password": password,
-        },
-      },
-    );
-
-    const prizeData =
-      await prizeResponse.json();
-
-    if (!prizeResponse.ok) {
-      setLoggedIn(false);
-      setMessage(
-        prizeData.error || "Feil passord",
-      );
-
-      return false;
-    }
-
-    const winnerResponse = await fetch(
-      "/api/admin/winners",
-      {
-        headers: {
-          "x-admin-password": password,
-        },
-      },
-    );
-
-    const winnerData =
-      await winnerResponse.json();
-
-    if (!winnerResponse.ok) {
-      setLoggedIn(false);
-
-      setMessage(
-        winnerData.error ||
-          "Kunne ikke hente vinnere",
-      );
-
-      return false;
-    }
-
-    setPrizes(prizeData);
-    setWinners(winnerData);
-    setLoggedIn(true);
-
-    setMessage(
-      showSuccessMessage
-        ? "Oversikten er oppdatert."
-        : "",
-    );
-
-    return true;
-  }
-
-  async function updateStatus(
-    id: string,
-    fulfillmentStatus:
-      | "shipped"
-      | "fulfilled",
-  ) {
-    setUpdatingWinnerId(id);
-    setMessage("");
-
-    const response = await fetch(
-      "/api/admin/winners",
-      {
-        method: "PATCH",
-
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          "x-admin-password": password,
-        },
-
-        body: JSON.stringify({
-          id,
-          fulfillmentStatus,
-        }),
-      },
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      setUpdatingWinnerId(null);
-
-      setMessage(
-        result.error ||
-          "Kunne ikke oppdatere status",
-      );
-
-      return;
-    }
-
-    setWinners((current) =>
-      current.map((winner) =>
-        winner.id === id
-          ? {
-              ...winner,
-              fulfillment_status:
-                fulfillmentStatus,
-            }
-          : winner,
-      ),
-    );
-
-    if (selectedWinner?.id === id) {
-      setSelectedWinner((current) =>
-        current
-          ? {
-              ...current,
-              fulfillment_status:
-                fulfillmentStatus,
-            }
-          : current,
-      );
-    }
-
-    setUpdatingWinnerId(null);
-
-    setMessage(
-      fulfillmentStatus === "fulfilled"
-        ? "Premien er markert som utlevert."
-        : "Premien er markert som sendt.",
-    );
-  }
-
-  async function remove(id: string) {
-    if (
-      !confirm(
-        "Vil du fjerne denne premien?",
-      )
-    ) {
-      return;
-    }
-
-    const response = await fetch(
-      `/api/admin/prizes?id=${id}`,
-      {
-        method: "DELETE",
-
-        headers: {
-          "x-admin-password": password,
-        },
-      },
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      setMessage(
-        result.error ||
-          "Kunne ikke fjerne premien",
-      );
-
-      return;
-    }
-
-    await load();
-  }
-
-  async function upload(file: File) {
-    const formData = new FormData();
-
-    formData.append("file", file);
-
-    const response = await fetch(
-      "/api/admin/upload",
-      {
-        method: "POST",
-
-        headers: {
-          "x-admin-password": password,
-        },
-
-        body: formData,
-      },
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      setMessage(
-        result.error ||
-          "Opplasting feilet",
-      );
-
-      return;
-    }
-
-    setForm((current) => ({
-      ...current,
-      image_url: result.url,
-    }));
-  }
-
-  function resetForm() {
-    setForm({
-      name: "",
-      description: "",
-      value_nok: 0,
-      quantity_total: 1,
-      win_chance_percent: 1,
-      sort_order: 1,
-      active: true,
-      is_consolation: false,
-      image_url: "",
-      level: "Premie",
-    });
-
-    setEditingPrizeId(null);
-  }
-
-  function startEditingPrize(
-    prize: Prize,
-  ) {
-    setEditingPrizeId(prize.id);
-
-    setForm({
-      name: prize.name || "",
-      description:
-        prize.description || "",
-
-      value_nok: Number(
-        prize.value_nok || 0,
-      ),
-
-      quantity_total: Number(
-        prize.quantity_total ||
-          prize.quantity_remaining ||
-          1,
-      ),
-
-      win_chance_percent: Number(
-        prize.win_chance_percent || 0,
-      ),
-
-      sort_order: Number(
-        prize.sort_order || 0,
-      ),
-
-      active: prize.active !== false,
-
-      is_consolation: Boolean(
-        prize.is_consolation,
-      ),
-
-      image_url:
-        prize.image_url || "",
-
-      level:
-        prize.level || "Premie",
-    });
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-
-    setMessage(
-      "Du redigerer nå premien.",
-    );
-  }
-
-  async function save() {
-    const isEditing =
-      Boolean(editingPrizeId);
-
-    const response = await fetch(
-      "/api/admin/prizes",
-      {
-        method: isEditing
-          ? "PATCH"
-          : "POST",
-
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          "x-admin-password": password,
-        },
-
-        body: JSON.stringify({
-          ...form,
-          id: editingPrizeId,
-        }),
-      },
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      setMessage(
-        result.error ||
-          (isEditing
-            ? "Kunne ikke oppdatere premien"
-            : "Kunne ikke lagre"),
-      );
-
-      return;
-    }
-
-    setMessage(
-      isEditing
-        ? "Premien er oppdatert."
-        : "Premien er lagret.",
-    );
-
-    resetForm();
-    await load();
-  }
-
-  function statusInfo(
-    status?: string | null,
-  ) {
-    const normalized = (
-      status || ""
-    ).toLowerCase();
-
-    if (
-      [
-        "fulfilled",
-        "delivered",
-        "utlevert",
-        "collected",
-      ].includes(normalized)
-    ) {
-      return {
-        text: "Utlevert",
-        color: "#166534",
-        background: "#dcfce7",
-      };
-    }
-
-    if (
-      [
-        "shipped",
-        "sent",
-        "sendt",
-      ].includes(normalized)
-    ) {
-      return {
-        text: "Sendt",
-        color: "#92400e",
-        background: "#fef3c7",
-      };
-    }
-
-    return {
-      text: "Ubehandlet",
-      color: "#9f1239",
-      background: "#ffe4e6",
-    };
-  }
-
-  function formatDate(value?: string | null) {
-    if (!value) return "Ikke registrert";
-
-    try {
-      return new Intl.DateTimeFormat(
-        "nb-NO",
-        {
-          dateStyle: "short",
-          timeStyle: "short",
-        },
-      ).format(new Date(value));
-    } catch {
-      return value;
-    }
-  }
-
-  function printCurrentList() {
-    const popup = window.open(
-      "",
-      "_blank",
-      "width=1000,height=800",
-    );
-
-    if (!popup) {
-      alert(
-        "Nettleseren blokkerte utskriftsvinduet.",
-      );
-
-      return;
-    }
-
-    const title =
-      winnerFilter === "shipping"
-        ? "Premier som skal sendes"
-        : winnerFilter === "pickup"
-          ? "Premier som skal hentes"
-          : winnerFilter ===
-              "processed"
-            ? "Behandlede premier"
-            : "Alle ubehandlede premier";
-
-    const rows = filteredWinners
-      .map((winner) => {
-        const name =
-          winner.shipping_name ||
-          winner.orders?.customer_name ||
-          "";
-
-        const address =
-          winner.fulfillment_method ===
-          "shipping"
-            ? `${winner.shipping_address || ""}<br>
-               ${winner.shipping_postal_code || ""} ${winner.shipping_city || ""}`
-            : "";
-
-        return `
-          <tr>
-            <td>${winner.prizes?.name || ""}</td>
-            <td>${name}</td>
-            <td>${winner.orders?.phone || ""}</td>
-            <td>${methodText(winner.fulfillment_method)}</td>
-            <td>${address}</td>
-            <td>${winner.ticket_number || ""}</td>
-          </tr>
-        `;
-      })
-      .join("");
-
-    popup.document.write(`
-      <!DOCTYPE html>
-      <html lang="no">
-      <head>
-        <meta charset="utf-8">
-        <title>${title}</title>
-
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            padding: 30px;
-            color: #17354a;
-          }
-
-          h1 {
-            margin-bottom: 5px;
-          }
-
-          p {
-            color: #617988;
-          }
-
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 25px;
-          }
-
-          th {
-            text-align: left;
-            background: #eef8fe;
-          }
-
-          th,
-          td {
-            padding: 10px;
-            border-bottom: 1px solid #d9eaf4;
-            vertical-align: top;
-          }
-        </style>
-      </head>
-
-      <body>
-
-        <h1>${title}</h1>
-
-        <p>
-          Bergenstjerne Fotballklubb ·
-          ${filteredWinners.length} premier
-        </p>
-
-        <table>
-
-          <thead>
-            <tr>
-              <th>Premie</th>
-              <th>Navn</th>
-              <th>Telefon</th>
-              <th>Levering</th>
-              <th>Adresse</th>
-              <th>Loddnr.</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            ${rows}
-          </tbody>
-
-        </table>
-
-        <script>
-          window.onload = function() {
-            window.print();
-          }
-        </script>
-
-      </body>
-      </html>
-    `);
-
-    popup.document.close();
-  }
-
-  const filterButtons = [
-    {
-      id: "pending" as const,
-      label: "Ubehandlede",
-      count: statistics.pending,
-    },
-    {
-      id: "shipping" as const,
-      label: "Skal sendes",
-      count: statistics.shipping,
-    },
-    {
-      id: "pickup" as const,
-      label: "Skal hentes",
-      count: statistics.pickup,
-    },
-    {
-      id: "processed" as const,
-      label: "Behandlede",
-      count: statistics.processed,
-    },
-  ];
 
   return (
-    <main className="container adminWrap">
-      <div
-        style={{
-          marginBottom: 25,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 900,
-            letterSpacing: 1,
-            color: "#2c8fc5",
-            textTransform: "uppercase",
-          }}
-        >
-          Bergenstjerne FK
+    <article style={styles.ticketCard}>
+      <div style={styles.ticketHeader}>
+        <div>
+          <strong>Lodd {number}</strong>
+          <div style={styles.ticketId}>{ticket.id}</div>
         </div>
-
-        <h1
-          style={{
-            margin: "6px 0",
-            fontSize: "clamp(32px,5vw,48px)",
-          }}
-        >
-          Administrasjon
-        </h1>
-
-        <p
-          style={{
-            margin: 0,
-            color: "#617988",
-          }}
-        >
-          Premier, vinnere og
-          premieutlevering
-        </p>
+        <span style={styles.badge}>Bergenstjerne FK</span>
       </div>
 
-      {!loggedIn ? (
-        <div
-          className="panel"
-          style={{
-            maxWidth: 500,
-          }}
-        >
-          <h2>Logg inn</h2>
+      <div style={styles.scratchArea}>
+        <div style={styles.symbolGrid}>
+          {(ticket.symbols || []).map((symbol, index) => (
+            <div style={styles.symbolBox} key={`${ticket.id}-${index}`}>
+              <img
+                src={symbol}
+                alt={`Symbol ${index + 1}`}
+                style={styles.symbolImage}
+              />
+            </div>
+          ))}
+        </div>
 
-          <label>
-            Adminpassord
-
-            <input
-              type="password"
-              value={password}
-              onChange={(event) =>
-                setPassword(
-                  event.target.value,
-                )
-              }
-              onKeyDown={(event) => {
-                if (
-                  event.key === "Enter"
-                ) {
-                  load();
-                }
-              }}
-            />
-          </label>
-
-          <button
-            className="btn primary wide"
-            style={{
-              marginTop: 14,
+        {!revealed && (
+          <canvas
+            ref={canvasRef}
+            style={styles.canvas}
+            onPointerDown={(event) => {
+              drawingRef.current = true;
+              event.currentTarget.setPointerCapture(event.pointerId);
+              scratch(event);
             }}
-            onClick={() => load()}
-          >
-            Åpne kontrollpanelet
-          </button>
+            onPointerMove={scratch}
+            onPointerUp={() => {
+              drawingRef.current = false;
+            }}
+            onPointerCancel={() => {
+              drawingRef.current = false;
+            }}
+          />
+        )}
+      </div>
 
-          <p>{message}</p>
+      {!revealed ? (
+        <button type="button" style={styles.smallButton} onClick={reveal}>
+          Vis hele loddet
+        </button>
+      ) : ticket.prize ? (
+        <div style={styles.winBox}>
+          <strong>Gratulerer! Du vant {ticket.prize.name || "en premie"}.</strong>
+          {ticket.prize.description && <p>{ticket.prize.description}</p>}
         </div>
       ) : (
-        <>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                "repeat(auto-fit,minmax(150px,1fr))",
-              gap: 12,
-              marginBottom: 20,
-            }}
-          >
-            {[
-              [
-                "Vinnere",
-                statistics.winners,
-              ],
-              [
-                "Ubehandlede",
-                statistics.pending,
-              ],
-              [
-                "Skal sendes",
-                statistics.shipping,
-              ],
-              [
-                "Skal hentes",
-                statistics.pickup,
-              ],
-              [
-                "Premier igjen",
-                statistics.prizesRemaining,
-              ],
-            ].map(([label, value]) => (
-              <div
-                key={String(label)}
-                className="panel"
-                style={{
-                  padding: 18,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 30,
-                    fontWeight: 950,
-                    color: "#143246",
-                  }}
-                >
-                  {value}
-                </div>
-
-                <div
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 800,
-                    color: "#617988",
-                    marginTop: 4,
-                  }}
-                >
-                  {label}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="adminGrid">
-            <div className="panel">
-              <h2>
-                {editingPrizeId
-                  ? "Rediger premie"
-                  : "Ny premie"}
-              </h2>
-
-              <label>
-                Navn
-
-                <input
-                  value={form.name}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      name:
-                        event.target.value,
-                    })
-                  }
-                />
-              </label>
-
-              <label>
-                Beskrivelse
-
-                <textarea
-                  value={
-                    form.description
-                  }
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      description:
-                        event.target.value,
-                    })
-                  }
-                  placeholder="Kort beskrivelse av premien"
-                />
-              </label>
-
-              <label>
-                Verdi i kroner
-
-                <input
-                  type="number"
-                  min="0"
-                  value={form.value_nok}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      value_nok: Number(
-                        event.target.value,
-                      ),
-                    })
-                  }
-                />
-              </label>
-
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginTop: 12,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={
-                    form.is_consolation
-                  }
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      is_consolation:
-                        event.target.checked,
-                    })
-                  }
-                  style={{
-                    width: 20,
-                    margin: 0,
-                  }}
-                />
-
-                Dette er trøstepremien
-              </label>
-
-              <label>
-                Antall
-
-                <input
-                  type="number"
-                  min="1"
-                  value={
-                    form.quantity_total
-                  }
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      quantity_total:
-                        Number(
-                          event.target
-                            .value,
-                        ),
-                    })
-                  }
-                />
-              </label>
-
-              <label>
-                Vinnersjanse i prosent
-
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  value={
-                    form.win_chance_percent
-                  }
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      win_chance_percent:
-                        Number(
-                          event.target
-                            .value,
-                        ),
-                    })
-                  }
-                />
-              </label>
-
-              <label>
-                Bilde
-
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => {
-                    const file =
-                      event.target.files?.[0];
-
-                    if (file) {
-                      upload(file);
-                    }
-                  }}
-                />
-              </label>
-
-              {form.image_url && (
-                <img
-                  src={form.image_url}
-                  alt="Forhåndsvisning"
-                  style={{
-                    width: 130,
-                    height: 130,
-                    objectFit: "contain",
-                    marginTop: 12,
-                    background: "#fff",
-                    borderRadius: 16,
-                    border:
-                      "1px solid #d9eaf4",
-                  }}
-                />
-              )}
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  flexWrap: "wrap",
-                  marginTop: 16,
-                }}
-              >
-                <button
-                  className="btn green"
-                  onClick={save}
-                >
-                  {editingPrizeId
-                    ? "Oppdater premie"
-                    : "Lagre premie"}
-                </button>
-
-                {editingPrizeId && (
-                  <button
-                    className="btn secondary"
-                    onClick={() => {
-                      resetForm();
-
-                      setMessage(
-                        "Redigering avbrutt.",
-                      );
-                    }}
-                  >
-                    Avbryt
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div
-            className="panel"
-            style={{
-              marginTop: 20,
-            }}
-          >
-            <h2>Premier</h2>
-
-            <div className="adminList">
-              {prizes.map((prize) => (
-                <div
-                  className="row"
-                  key={prize.id}
-                >
-                  <img
-                    src={prize.image_url}
-                    alt={prize.name}
-                  />
-
-                  <div>
-                    <b>{prize.name}</b>
-
-                    {prize.is_consolation && (
-                      <span>
-                        {" "}
-                        · Trøstepremie
-                      </span>
-                    )}
-
-                    <br />
-
-                    <small>
-                      {
-                        prize.quantity_remaining
-                      }{" "}
-                      igjen ·{" "}
-                      {
-                        prize.win_chance_percent
-                      }
-                      %
-                    </small>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 8,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <button
-                      className="small"
-                      onClick={() =>
-                        startEditingPrize(
-                          prize,
-                        )
-                      }
-                    >
-                      Rediger
-                    </button>
-
-                    <button
-                      className="small danger"
-                      onClick={() =>
-                        remove(prize.id)
-                      }
-                    >
-                      Fjern
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div
-            className="panel"
-            style={{
-              marginTop: 20,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent:
-                  "space-between",
-                gap: 14,
-                flexWrap: "wrap",
-                alignItems: "center",
-              }}
-            >
-              <div>
-                <h2
-                  style={{
-                    margin: 0,
-                  }}
-                >
-                  Premieutlevering
-                </h2>
-
-                <p
-                  style={{
-                    margin:
-                      "5px 0 0",
-                    color: "#617988",
-                  }}
-                >
-                  Behandle vinnere,
-                  sending og henting.
-                </p>
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                }}
-              >
-                <button
-                  className="btn secondary"
-                  onClick={() =>
-                    load(true)
-                  }
-                >
-                  Oppdater
-                </button>
-
-                <button
-                  className="btn primary"
-                  onClick={
-                    printCurrentList
-                  }
-                >
-                  Skriv ut liste
-                </button>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                flexWrap: "wrap",
-                marginTop: 20,
-              }}
-            >
-              {filterButtons.map(
-                (filter) => {
-                  const active =
-                    winnerFilter ===
-                    filter.id;
-
-                  return (
-                    <button
-                      key={filter.id}
-                      onClick={() =>
-                        setWinnerFilter(
-                          filter.id,
-                        )
-                      }
-                      style={{
-                        border: active
-                          ? "1px solid #2c8fc5"
-                          : "1px solid #d9eaf4",
-
-                        background: active
-                          ? "#2c8fc5"
-                          : "#fff",
-
-                        color: active
-                          ? "#fff"
-                          : "#143246",
-
-                        padding:
-                          "11px 15px",
-
-                        borderRadius: 999,
-                        fontWeight: 900,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {filter.label}{" "}
-                      <span
-                        style={{
-                          opacity: 0.8,
-                        }}
-                      >
-                        ({filter.count})
-                      </span>
-                    </button>
-                  );
-                },
-              )}
-            </div>
-
-            <div
-              style={{
-                marginTop: 16,
-              }}
-            >
-              <input
-                value={winnerSearch}
-                onChange={(event) =>
-                  setWinnerSearch(
-                    event.target.value,
-                  )
-                }
-                placeholder="Søk etter navn, telefon, premie eller loddnummer"
-              />
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gap: 10,
-                marginTop: 18,
-              }}
-            >
-              {filteredWinners.length ===
-              0 ? (
-                <div
-                  style={{
-                    padding: 25,
-                    textAlign:
-                      "center",
-                    color: "#617988",
-                    background:
-                      "#f8fcff",
-                    borderRadius: 16,
-                  }}
-                >
-                  Ingen vinnere i denne
-                  kategorien.
-                </div>
-              ) : (
-                filteredWinners.map(
-                  (winner) => {
-                    const status =
-                      statusInfo(
-                        winner.fulfillment_status,
-                      );
-
-                    return (
-                      <button
-                        key={winner.id}
-                        onClick={() =>
-                          setSelectedWinner(
-                            winner,
-                          )
-                        }
-                        style={{
-                          width: "100%",
-                          border:
-                            "1px solid #d9eaf4",
-                          borderRadius: 16,
-                          background: "#fff",
-                          padding: 15,
-                          cursor: "pointer",
-                          display: "grid",
-                          gridTemplateColumns:
-                            "minmax(160px,2fr) minmax(130px,1fr) minmax(120px,1fr) auto",
-                          gap: 12,
-                          alignItems:
-                            "center",
-                          textAlign: "left",
-                        }}
-                      >
-                        <div>
-                          <div
-                            style={{
-                              fontWeight: 950,
-                              fontSize: 16,
-                            }}
-                          >
-                            {winner.orders
-                              ?.customer_name ||
-                              winner.shipping_name ||
-                              "Navn mangler"}
-                          </div>
-
-                          <div
-                            style={{
-                              color:
-                                "#617988",
-                              fontSize: 13,
-                              marginTop: 4,
-                            }}
-                          >
-                            {winner.orders
-                              ?.phone ||
-                              "Telefon mangler"}
-                          </div>
-                        </div>
-
-                        <div>
-                          <strong>
-                            {winner.prizes
-                              ?.name ||
-                              "Ukjent premie"}
-                          </strong>
-                        </div>
-
-                        <div>
-                          {methodText(
-                            winner.fulfillment_method,
-                          )}
-                        </div>
-
-                        <span
-                          style={{
-                            padding:
-                              "7px 11px",
-                            borderRadius:
-                              999,
-                            fontSize: 12,
-                            fontWeight: 900,
-                            color:
-                              status.color,
-                            background:
-                              status.background,
-                            whiteSpace:
-                              "nowrap",
-                          }}
-                        >
-                          {status.text}
-                        </span>
-                      </button>
-                    );
-                  },
-                )
-              )}
-            </div>
-          </div>
-
-          {message && (
-            <div
-              className="panel"
-              style={{
-                marginTop: 16,
-                fontWeight: 800,
-              }}
-            >
-              {message}
-            </div>
-          )}
-        </>
-      )}
-
-      {selectedWinner && (
-        <div
-          className="modal"
-          onClick={() =>
-            setSelectedWinner(null)
-          }
-        >
-          <div
-            className="modalCard"
-            onClick={(event) =>
-              event.stopPropagation()
-            }
-            style={{
-              maxWidth: 650,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent:
-                  "space-between",
-                gap: 15,
-                alignItems:
-                  "center",
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "#617988",
-                    fontWeight: 800,
-                  }}
-                >
-                  VINNER
-                </div>
-
-                <h2
-                  style={{
-                    margin:
-                      "3px 0 0",
-                  }}
-                >
-                  {selectedWinner.orders
-                    ?.customer_name ||
-                    selectedWinner.shipping_name ||
-                    "Navn mangler"}
-                </h2>
-              </div>
-
-              <button
-                className="small"
-                onClick={() =>
-                  setSelectedWinner(
-                    null,
-                  )
-                }
-              >
-                Lukk
-              </button>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gap: 12,
-                marginTop: 22,
-              }}
-            >
-              <Detail
-                label="Premie"
-                value={
-                  selectedWinner.prizes
-                    ?.name ||
-                  "Ukjent premie"
-                }
-              />
-
-              <Detail
-                label="Telefon"
-                value={
-                  selectedWinner.orders
-                    ?.phone ||
-                  "Ikke registrert"
-                }
-              />
-
-              <Detail
-                label="Levering"
-                value={methodText(
-                  selectedWinner.fulfillment_method,
-                )}
-              />
-
-              {selectedWinner.fulfillment_method ===
-                "shipping" && (
-                <>
-                  <Detail
-                    label="Mottaker"
-                    value={
-                      selectedWinner.shipping_name ||
-                      selectedWinner.orders
-                        ?.customer_name ||
-                      "Ikke registrert"
-                    }
-                  />
-
-                  <Detail
-                    label="Adresse"
-                    value={
-                      selectedWinner.shipping_address ||
-                      "Ikke registrert"
-                    }
-                  />
-
-                  <Detail
-                    label="Poststed"
-                    value={`${selectedWinner.shipping_postal_code || ""} ${selectedWinner.shipping_city || ""}`.trim() || "Ikke registrert"}
-                  />
-                </>
-              )}
-
-              <Detail
-                label="Loddnummer"
-                value={
-                  selectedWinner.ticket_number ||
-                  "Ikke registrert"
-                }
-              />
-
-              <Detail
-                label="Registrert"
-                value={formatDate(
-                  selectedWinner.claimed_at,
-                )}
-              />
-            </div>
-
-            {!isProcessed(
-              selectedWinner,
-            ) && (
-              <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  flexWrap: "wrap",
-                  marginTop: 24,
-                }}
-              >
-                {selectedWinner.fulfillment_method ===
-                  "shipping" && (
-                  <button
-                    className="btn primary"
-                    disabled={
-                      updatingWinnerId ===
-                      selectedWinner.id
-                    }
-                    onClick={() =>
-                      updateStatus(
-                        selectedWinner.id,
-                        "shipped",
-                      )
-                    }
-                  >
-                    Merk som sendt
-                  </button>
-                )}
-
-                {selectedWinner.fulfillment_method ===
-                  "pickup" && (
-                  <button
-                    className="btn green"
-                    disabled={
-                      updatingWinnerId ===
-                      selectedWinner.id
-                    }
-                    onClick={() =>
-                      updateStatus(
-                        selectedWinner.id,
-                        "fulfilled",
-                      )
-                    }
-                  >
-                    Merk som utlevert
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+        <div style={styles.noWinBox}>
+          Ikke gevinst denne gangen – takk for at du støtter Bergenstjerne FK!
         </div>
       )}
+    </article>
+  );
+}
+
+function ReturnContent() {
+  const searchParams = useSearchParams();
+  const reference = searchParams.get("reference") || "";
+
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [message, setMessage] = useState("Kontrollerer betalingen hos Vipps …");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
+
+  const issueTickets = useCallback(async () => {
+    const response = await fetch("/api/tickets/issue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reference }),
+      cache: "no-store",
+    });
+
+    const result: ApiResult = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Kunne ikke opprette loddene.");
+    }
+
+    setTickets(result.tickets || []);
+    setMessage("Betalingen er godkjent. Loddene dine er klare!");
+    setLoading(false);
+  }, [reference]);
+
+  const checkPayment = useCallback(async () => {
+    if (!reference) {
+      setError("Betalingsreferansen mangler i adressen.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setError("");
+
+      const response = await fetch(
+        `/api/vipps/status/${encodeURIComponent(reference)}`,
+        { cache: "no-store" },
+      );
+
+      const result: ApiResult = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Kunne ikke kontrollere betalingen.");
+      }
+
+      if (result.status === "CAPTURED") {
+        setTickets(result.tickets || []);
+        setMessage("Betalingen er godkjent. Loddene dine er klare!");
+        setLoading(false);
+        return;
+      }
+
+      if (result.status === "AUTHORIZED_AND_CAPTURED") {
+        setMessage("Betalingen er godkjent. Gjør loddene klare …");
+        await issueTickets();
+        return;
+      }
+
+      if (attempt >= 29) {
+        setError(
+          "Betalingen er ikke ferdig registrert ennå. Vent litt og prøv på nytt.",
+        );
+        setLoading(false);
+        return;
+      }
+
+      setMessage("Venter på bekreftelse fra Vipps …");
+      window.setTimeout(() => setAttempt((value) => value + 1), 2000);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Det oppstod en feil under kontroll av betalingen.",
+      );
+      setLoading(false);
+    }
+  }, [attempt, issueTickets, reference]);
+
+  useEffect(() => {
+    void checkPayment();
+  }, [checkPayment]);
+
+  function retry() {
+    setLoading(true);
+    setError("");
+    setMessage("Kontrollerer betalingen hos Vipps …");
+    setAttempt((value) => value + 1);
+  }
+
+  return (
+    <main style={styles.page}>
+      <section style={styles.hero}>
+        <div style={styles.logoCircle}>★</div>
+        <p style={styles.eyebrow}>BERGENSTJERNE FOTBALLKLUBB</p>
+        <h1 style={styles.title}>Dine skrapelodd</h1>
+        <p style={styles.lead}>{message}</p>
+        {reference && <p style={styles.reference}>Referanse: {reference}</p>}
+      </section>
+
+      {loading && <div style={styles.loader} aria-label="Laster" />}
+
+      {error && (
+        <section style={styles.errorBox}>
+          <strong>Noe gikk galt</strong>
+          <p>{error}</p>
+          <button type="button" style={styles.retryButton} onClick={retry}>
+            Prøv på nytt
+          </button>
+        </section>
+      )}
+
+      {!loading && !error && tickets.length === 0 && (
+        <section style={styles.infoBox}>
+          Betalingen er registrert, men vi fant ingen lodd på ordren. Prøv på nytt.
+          <br />
+          <button type="button" style={styles.retryButton} onClick={retry}>
+            Hent loddene
+          </button>
+        </section>
+      )}
+
+      {tickets.length > 0 && (
+        <section style={styles.ticketList}>
+          {tickets.map((ticket, index) => (
+            <ScratchTicket key={ticket.id} ticket={ticket} number={index + 1} />
+          ))}
+        </section>
+      )}
+
+      <footer style={styles.footer}>
+        Takk for at du støtter fotballglede for alle.
+      </footer>
     </main>
   );
 }
 
-function Detail({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+export default function ReturnPage() {
   return (
-    <div
-      style={{
-        background: "#f5fafe",
-        border: "1px solid #e0edf5",
-        borderRadius: 14,
-        padding: 13,
-      }}
+    <Suspense
+      fallback={
+        <main style={styles.page}>
+          <div style={styles.loader} aria-label="Laster" />
+        </main>
+      }
     >
-      <div
-        style={{
-          fontSize: 12,
-          color: "#617988",
-          fontWeight: 900,
-          textTransform: "uppercase",
-          letterSpacing: 0.5,
-        }}
-      >
-        {label}
-      </div>
-
-      <div
-        style={{
-          fontWeight: 850,
-          marginTop: 4,
-        }}
-      >
-        {value}
-      </div>
-    </div>
+      <ReturnContent />
+    </Suspense>
   );
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background: "linear-gradient(180deg, #eef7fb 0%, #ffffff 55%)",
+    color: "#143246",
+    padding: "32px 16px 56px",
+    fontFamily: "Arial, Helvetica, sans-serif",
+  },
+  hero: { maxWidth: 760, margin: "0 auto 28px", textAlign: "center" },
+  logoCircle: {
+    width: 62,
+    height: 62,
+    margin: "0 auto 14px",
+    borderRadius: "50%",
+    display: "grid",
+    placeItems: "center",
+    background: "#e9c857",
+    color: "#143246",
+    fontSize: 34,
+    fontWeight: 900,
+  },
+  eyebrow: { margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: 1.5 },
+  title: { margin: "8px 0", fontSize: "clamp(30px, 7vw, 48px)" },
+  lead: { margin: "8px auto", fontSize: 18, lineHeight: 1.5 },
+  reference: { margin: "10px 0 0", fontSize: 12, color: "#657682" },
+  loader: {
+    width: 44,
+    height: 44,
+    margin: "40px auto",
+    border: "5px solid #dbe7ed",
+    borderTopColor: "#143246",
+    borderRadius: "50%",
+    animation: "spin 1s linear infinite",
+  },
+  ticketList: { maxWidth: 760, margin: "0 auto", display: "grid", gap: 24 },
+  ticketCard: {
+    background: "#ffffff",
+    border: "1px solid #dfe9ee",
+    borderRadius: 20,
+    padding: 18,
+    boxShadow: "0 12px 30px rgba(20,50,70,0.10)",
+  },
+  ticketHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 14,
+  },
+  ticketId: { marginTop: 4, fontSize: 11, color: "#7a8992" },
+  badge: {
+    background: "#143246",
+    color: "white",
+    borderRadius: 999,
+    padding: "7px 10px",
+    fontSize: 11,
+    fontWeight: 700,
+  },
+  scratchArea: {
+    position: "relative",
+    width: "100%",
+    maxWidth: 520,
+    aspectRatio: "1.45 / 1",
+    margin: "0 auto 14px",
+    overflow: "hidden",
+    borderRadius: 16,
+    background: "#eef3f6",
+  },
+  symbolGrid: {
+    position: "absolute",
+    inset: 0,
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: 8,
+    padding: 12,
+  },
+  symbolBox: {
+    minWidth: 0,
+    minHeight: 0,
+    display: "grid",
+    placeItems: "center",
+    background: "white",
+    borderRadius: 10,
+    border: "1px solid #dfe8ec",
+  },
+  symbolImage: {
+    display: "block",
+    width: "78%",
+    height: "78%",
+    objectFit: "contain",
+  },
+  canvas: {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    touchAction: "none",
+    cursor: "crosshair",
+  },
+  smallButton: {
+    display: "block",
+    margin: "0 auto",
+    border: 0,
+    background: "transparent",
+    color: "#143246",
+    textDecoration: "underline",
+    cursor: "pointer",
+  },
+  winBox: {
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 12,
+    background: "#fff5c7",
+    color: "#463800",
+    textAlign: "center",
+  },
+  noWinBox: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 12,
+    background: "#eef5f7",
+    textAlign: "center",
+  },
+  errorBox: {
+    maxWidth: 620,
+    margin: "28px auto",
+    padding: 20,
+    borderRadius: 14,
+    background: "#fff0f0",
+    color: "#7c1d1d",
+    textAlign: "center",
+  },
+  infoBox: {
+    maxWidth: 620,
+    margin: "28px auto",
+    padding: 20,
+    borderRadius: 14,
+    background: "#eef5f7",
+    textAlign: "center",
+    lineHeight: 1.6,
+  },
+  retryButton: {
+    marginTop: 10,
+    padding: "11px 18px",
+    border: 0,
+    borderRadius: 10,
+    background: "#143246",
+    color: "white",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  footer: { maxWidth: 760, margin: "32px auto 0", textAlign: "center", color: "#657682" },
 }
