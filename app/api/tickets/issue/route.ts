@@ -4,46 +4,11 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 /*
-  Lager noen nøytrale reservesymboler direkte i systemet.
-
-  Disse brukes bare for å sikre at et taperlodd aldri får
-  tre like symboler dersom det foreløpig finnes få premier.
-
-  Fotballen bruker bildet vårt i /public/football.svg.
+  Alle registrerte premiebilder brukes som skrapesymboler.
+  Den ekte fotballen brukes som eneste reservesymbol.
+  Ingen emoji eller kunstige symboler.
 */
-function makeNeutralSvg(symbol: string, label: string) {
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="220" height="220" viewBox="0 0 220 220">
-      <rect width="220" height="220" rx="28" fill="white"/>
-      <text
-        x="110"
-        y="112"
-        text-anchor="middle"
-        dominant-baseline="middle"
-        font-size="92"
-        font-family="Arial, sans-serif"
-      >${symbol}</text>
-      <text
-        x="110"
-        y="185"
-        text-anchor="middle"
-        font-size="20"
-        font-family="Arial, sans-serif"
-        fill="#143246"
-      >${label}</text>
-    </svg>
-  `;
-
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-const NEUTRAL_SYMBOLS = [
-  "/football.svg",
-  makeNeutralSvg("★", "Stjerne"),
-  makeNeutralSvg("🏆", "Pokal"),
-  makeNeutralSvg("⚽", "Kamp"),
-  makeNeutralSvg("👟", "Fotball"),
-];
+const NEUTRAL_SYMBOLS = ["/football.svg"];
 
 function shuffle<T>(items: T[]) {
   const array = [...items];
@@ -236,9 +201,8 @@ export async function POST(req: Request) {
     /*
       Alle aktive premielogoer kan brukes som symboler.
 
-      I tillegg har vi nøytrale symboler slik at systemet
-      også fungerer dersom klubben foreløpig bare har
-      én eller to premier.
+      Premiebildene er hovedsymbolene. Den ekte fotballen
+      brukes som eneste reservesymbol.
     */
     const prizeSymbols = allPrizes
       .map((prize: any) => prize.image_url)

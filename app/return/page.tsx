@@ -263,7 +263,11 @@ function ReturnContent() {
   return (
     <main style={styles.page}>
       <section style={styles.hero}>
-        <div style={styles.logoCircle}>★</div>
+        <img
+          src="/bergenstjerne-logo.jpeg"
+          alt="Bergenstjerne Fotballklubb"
+          style={styles.logo}
+        />
         <p style={styles.eyebrow}>BERGENSTJERNE FOTBALLKLUBB</p>
         <h1 style={styles.title}>Dine skrapelodd</h1>
         <p style={styles.lead}>{message}</p>
@@ -330,17 +334,14 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "Arial, Helvetica, sans-serif",
   },
   hero: { maxWidth: 760, margin: "0 auto 28px", textAlign: "center" },
-  logoCircle: {
-    width: 62,
-    height: 62,
+  logo: {
+    display: "block",
+    width: 92,
+    height: 92,
     margin: "0 auto 14px",
     borderRadius: "50%",
-    display: "grid",
-    placeItems: "center",
-    background: "#e9c857",
-    color: "#143246",
-    fontSize: 34,
-    fontWeight: 900,
+    objectFit: "cover",
+    boxShadow: "0 8px 22px rgba(20,50,70,0.18)",
   },
   eyebrow: { margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: 1.5 },
   title: { margin: "8px 0", fontSize: "clamp(30px, 7vw, 48px)" },
@@ -473,4 +474,4 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   footer: { maxWidth: 760, margin: "32px auto 0", textAlign: "center", color: "#657682" },
-}
+};
