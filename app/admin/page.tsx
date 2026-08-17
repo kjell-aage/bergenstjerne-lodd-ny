@@ -58,6 +58,8 @@ type Campaign = {
   start_date?: string | null;
   end_date?: string | null;
   status: "draft" | "active" | "ended";
+  slug?: string | null;
+  metrics?: CampaignMetrics;
 };
 
 type CampaignMetrics = {
@@ -120,9 +122,12 @@ export default function AdminPage() {
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [winners, setWinners] = useState<Winner[]>([]);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaignMetrics, setCampaignMetrics] =
     useState<CampaignMetrics | null>(null);
   const [savingCampaign, setSavingCampaign] = useState(false);
+  const [campaignEditorMode, setCampaignEditorMode] =
+    useState<"new" | "edit" | null>(null);
 
   const [message, setMessage] = useState("");
 
@@ -340,6 +345,103 @@ export default function AdminPage() {
     winnerSearch,
   ]);
 
+  function blankCampaign(): Campaign {
+    return {
+      id: "",
+      name: "",
+      ticket_price: 25,
+      max_tickets: 1,
+      goal_amount: 1,
+      organization_name: "",
+      team_name: null,
+      purpose_text: null,
+      start_date: null,
+      end_date: null,
+      status: "draft",
+      slug: null,
+    };
+  }
+
+  function campaignStatusLabel(status: Campaign["status"]) {
+    if (status === "active") return "Pågående";
+    if (status === "ended") return "Avsluttet";
+    return "Kladd";
+  }
+
+  function startNewCampaign() {
+    setCampaign(blankCampaign());
+    setCampaignMetrics(null);
+    setCampaignEditorMode("new");
+    setMessage("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function editCampaign(id: string) {
+    setMessage("");
+    const response = await fetch(
+      `/api/admin/campaign?id=${encodeURIComponent(id)}`,
+      { headers: { "x-admin-password": password } },
+    );
+    const result = await response.json();
+    if (!response.ok) {
+      setMessage(result.error || "Kunne ikke åpne kampanjen.");
+      return;
+    }
+    setCampaign(result.campaign);
+    setCampaignMetrics(result.metrics || null);
+    setCampaignEditorMode("edit");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function deleteCampaign(item: Campaign) {
+    const hasSales = Number(item.metrics?.paid_orders || 0) > 0;
+    const question = hasSales
+      ? `Kampanjen "${item.name}" har registrerte kjøp og vil derfor bli arkivert. Vil du fortsette?`
+      : `Vil du slette kampanjen "${item.name}"?`;
+
+    if (!confirm(question)) return;
+
+    const response = await fetch(
+      `/api/admin/campaign?id=${encodeURIComponent(item.id)}`,
+      {
+        method: "DELETE",
+        headers: { "x-admin-password": password },
+      },
+    );
+    const result = await response.json();
+    if (!response.ok) {
+      setMessage(result.error || "Kunne ikke slette kampanjen.");
+      return;
+    }
+
+    if (campaign?.id === item.id) {
+      setCampaign(null);
+      setCampaignMetrics(null);
+      setCampaignEditorMode(null);
+    }
+
+    await load(false);
+    setMessage(
+      result.archived
+        ? "Kampanjen er arkivert fordi den har registrerte kjøp."
+        : "Kampanjen er slettet.",
+    );
+  }
+
+  function shareCampaign(item: Campaign) {
+    if (!item.slug) {
+      setMessage("Kampanjen mangler delingsadresse.");
+      return;
+    }
+    const url = `${window.location.origin}/kampanje/${item.slug}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+      setMessage("Delingslenken er kopiert.");
+      return;
+    }
+    window.prompt("Kopier delingslenken:", url);
+  }
+
   async function load(
     showSuccessMessage = false,
   ) {
@@ -410,8 +512,26 @@ export default function AdminPage() {
 
     setPrizes(prizeData);
     setWinners(winnerData);
-    setCampaign(campaignData.campaign || campaignData);
-    setCampaignMetrics(campaignData.metrics || null);
+
+    const loadedCampaigns: Campaign[] = Array.isArray(campaignData.campaigns)
+      ? campaignData.campaigns
+      : campaignData.campaign
+        ? [{ ...campaignData.campaign, metrics: campaignData.metrics }]
+        : [];
+
+    setCampaigns(loadedCampaigns);
+
+    if (campaignEditorMode === null) {
+      setCampaign(null);
+      setCampaignMetrics(null);
+    } else if (campaign?.id) {
+      const refreshed = loadedCampaigns.find((item) => item.id === campaign.id);
+      if (refreshed) {
+        setCampaign(refreshed);
+        setCampaignMetrics(refreshed.metrics || null);
+      }
+    }
+
     setLoggedIn(true);
 
     setMessage(
@@ -426,31 +546,34 @@ export default function AdminPage() {
   async function saveCampaign() {
     if (!campaign || savingCampaign) return;
 
+    if (!campaign.name?.trim()) {
+      setMessage("Kampanjenavn må fylles ut.");
+      return;
+    }
     if (Number(campaign.ticket_price) <= 0) {
       setMessage("Loddprisen må være høyere enn 0 kr.");
       return;
     }
-
     if (Number(campaign.max_tickets) <= 0) {
       setMessage("Antall lodd må være høyere enn 0.");
       return;
     }
-
     if (!campaign.organization_name?.trim()) {
       setMessage("Organisasjonsnavn må fylles ut.");
       return;
     }
-
     if (Number(campaign.goal_amount) <= 0) {
       setMessage("Kampanjemålet må være høyere enn 0 kr.");
       return;
     }
-
     if (Number(campaign.goal_amount) > 200000) {
       setMessage("Kampanjemålet kan ikke være høyere enn 200 000 kr i denne versjonen.");
       return;
     }
-
+    if (Number(campaign.ticket_price) * Number(campaign.max_tickets) > 200000) {
+      setMessage("Pris per lodd × maks antall lodd kan ikke overstige 200 000 kr.");
+      return;
+    }
     if (
       campaign.start_date &&
       campaign.end_date &&
@@ -464,33 +587,36 @@ export default function AdminPage() {
     setMessage("");
 
     try {
-      const response = await fetch(
-        "/api/admin/campaign",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "x-admin-password": password,
-          },
-          body: JSON.stringify(campaign),
+      const isNew = campaignEditorMode === "new" || !campaign.id;
+      const response = await fetch("/api/admin/campaign", {
+        method: isNew ? "POST" : "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-password": password,
         },
-      );
-
+        body: JSON.stringify(campaign),
+      });
       const result = await response.json();
 
       if (!response.ok) {
         setMessage(
           result.error ||
-            "Kunne ikke lagre kampanjeinnstillingene",
+            (isNew
+              ? "Kunne ikke opprette kampanjen"
+              : "Kunne ikke lagre kampanjen"),
         );
         return;
       }
 
-      setCampaign(result.campaign);
-      if (result.metrics) {
-        setCampaignMetrics(result.metrics);
-      }
-      setMessage("Kampanjeinnstillingene er lagret.");
+      setCampaign(null);
+      setCampaignMetrics(null);
+      setCampaignEditorMode(null);
+      await load(false);
+      setMessage(
+        isNew
+          ? "Kampanjen er lagret og lagt under Kampanjer."
+          : "Kampanjen er oppdatert.",
+      );
     } finally {
       setSavingCampaign(false);
     }
@@ -1060,6 +1186,78 @@ export default function AdminPage() {
         </div>
       ) : (
         <>
+          <div className="panel" style={{ marginBottom: 20, padding: 24 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 950, letterSpacing: 0.8, textTransform: "uppercase", color: "#2c8fc5" }}>
+                  Kampanjer
+                </div>
+                <h2 style={{ margin: "5px 0 4px" }}>Kampanjeoversikt</h2>
+                <p style={{ margin: 0, color: "#617988" }}>
+                  Opprett, rediger, del og avslutt klubbens kampanjer.
+                </p>
+              </div>
+              <button className="btn primary" onClick={startNewCampaign}>
+                + Ny kampanje
+              </button>
+            </div>
+
+            {campaigns.length === 0 ? (
+              <div style={{ marginTop: 18, padding: 22, borderRadius: 16, background: "#f8fcff", color: "#617988", textAlign: "center" }}>
+                Ingen kampanjer er opprettet ennå.
+              </div>
+            ) : (
+              <div style={{ display: "grid", gap: 18, marginTop: 20 }}>
+                {(["active", "draft", "ended"] as const).map((status) => {
+                  const items = campaigns.filter((item) => item.status === status);
+                  if (items.length === 0) return null;
+
+                  return (
+                    <div key={status}>
+                      <h3 style={{ margin: "0 0 8px" }}>
+                        {campaignStatusLabel(status)} ({items.length})
+                      </h3>
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {items.map((item) => {
+                          const metrics = item.metrics;
+                          return (
+                            <div key={item.id} style={{ border: "1px solid #d9eaf4", borderRadius: 16, padding: 15, background: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                              <div style={{ minWidth: 220, flex: "1 1 360px" }}>
+                                <strong style={{ fontSize: 17 }}>{item.name}</strong>
+                                <div style={{ marginTop: 5, color: "#617988", fontSize: 13 }}>
+                                  {item.organization_name}
+                                  {item.team_name ? ` · ${item.team_name}` : ""}
+                                  {" · "}
+                                  {Number(metrics?.sold_tickets || 0).toLocaleString("nb-NO")} lodd
+                                  {" · "}
+                                  {Number(metrics?.revenue_nok || 0).toLocaleString("nb-NO")} kr
+                                  {" · mål "}
+                                  {Number(item.goal_amount || 0).toLocaleString("nb-NO")} kr
+                                </div>
+                              </div>
+
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                <button className="small" onClick={() => editCampaign(item.id)}>
+                                  Rediger
+                                </button>
+                                <button className="small" onClick={() => shareCampaign(item)} disabled={!item.slug}>
+                                  Del
+                                </button>
+                                <button className="small danger" onClick={() => deleteCampaign(item)}>
+                                  {Number(metrics?.paid_orders || 0) > 0 ? "Arkiver" : "Slett"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {campaign && (
             <div
               className="panel"
@@ -1087,10 +1285,10 @@ export default function AdminPage() {
                       color: "#2c8fc5",
                     }}
                   >
-                    Aktiv kampanje
+                    {campaignEditorMode === "new" ? "Ny kampanje" : "Rediger kampanje"}
                   </div>
                   <h2 style={{ margin: "5px 0 4px" }}>
-                    Kampanjeinnstillinger
+                    {campaignEditorMode === "new" ? "Opprett kampanje" : "Kampanjeinnstillinger"}
                   </h2>
                   <p
                     style={{
@@ -1550,15 +1748,32 @@ export default function AdminPage() {
                   maks antall lodd.
                 </div>
 
-                <button
-                  className="btn primary"
-                  onClick={saveCampaign}
-                  disabled={savingCampaign}
-                >
-                  {savingCampaign
-                    ? "Lagrer..."
-                    : "Lagre kampanje"}
-                </button>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    className="btn secondary"
+                    onClick={() => {
+                      setCampaign(null);
+                      setCampaignMetrics(null);
+                      setCampaignEditorMode(null);
+                      setMessage("Redigering av kampanje avbrutt.");
+                    }}
+                    disabled={savingCampaign}
+                  >
+                    Avbryt
+                  </button>
+
+                  <button
+                    className="btn primary"
+                    onClick={saveCampaign}
+                    disabled={savingCampaign}
+                  >
+                    {savingCampaign
+                      ? "Lagrer..."
+                      : campaignEditorMode === "new"
+                        ? "Lagre ny kampanje"
+                        : "Lagre endringer"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
