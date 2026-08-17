@@ -71,6 +71,48 @@ type CampaignMetrics = {
   goal_percent: number;
 };
 
+type PrizeCategory = "first" | "second" | "third" | "other";
+
+function normalizePrizeLevel(level?: string): PrizeCategory {
+  const value = (level || "").trim().toLowerCase();
+
+  if (
+    value === "first" ||
+    value.includes("1.") ||
+    value.includes("første")
+  ) {
+    return "first";
+  }
+
+  if (
+    value === "second" ||
+    value.includes("2.") ||
+    value.includes("andre")
+  ) {
+    return "second";
+  }
+
+  if (
+    value === "third" ||
+    value.includes("3.") ||
+    value.includes("tredje")
+  ) {
+    return "third";
+  }
+
+  return "other";
+}
+
+function prizeLevelLabel(level?: string) {
+  const normalized = normalizePrizeLevel(level);
+
+  if (normalized === "first") return "🥇 1. premie";
+  if (normalized === "second") return "🥈 2. premie";
+  if (normalized === "third") return "🥉 3. premie";
+
+  return "🎁 Øvrig premie";
+}
+
 export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [loggedIn, setLoggedIn] = useState(false);
@@ -108,7 +150,7 @@ export default function AdminPage() {
     active: true,
     is_consolation: false,
     image_url: "",
-    level: "Premie",
+    level: "other",
   });
 
   function isProcessed(winner: Winner) {
@@ -216,6 +258,26 @@ export default function AdminPage() {
       oneIn,
     };
   }, [campaign, prizes]);
+
+  const prizeCategoryPlan = useMemo(() => {
+    const initial = {
+      first: 0,
+      second: 0,
+      third: 0,
+      other: 0,
+    };
+
+    for (const prize of prizes.filter((item) => item.active !== false)) {
+      const category = normalizePrizeLevel(prize.level);
+      initial[category] += Number(
+        prize.quantity_total ??
+          prize.quantity_remaining ??
+          0,
+      );
+    }
+
+    return initial;
+  }, [prizes]);
 
   const filteredWinners = useMemo(() => {
     let result = [...winners];
@@ -588,7 +650,7 @@ export default function AdminPage() {
       active: true,
       is_consolation: false,
       image_url: "",
-      level: "Premie",
+      level: "other",
     });
 
     setEditingPrizeId(null);
@@ -631,8 +693,7 @@ export default function AdminPage() {
       image_url:
         prize.image_url || "",
 
-      level:
-        prize.level || "Premie",
+      level: normalizePrizeLevel(prize.level),
     });
 
     window.scrollTo({
@@ -666,6 +727,12 @@ export default function AdminPage() {
         body: JSON.stringify({
           ...form,
           id: editingPrizeId,
+          win_chance_percent:
+            campaign && Number(campaign.max_tickets) > 0
+              ? (Number(form.quantity_total) /
+                  Number(campaign.max_tickets)) *
+                100
+              : 0,
         }),
       },
     );
@@ -1558,6 +1625,111 @@ export default function AdminPage() {
             ))}
           </div>
 
+          <div
+            className="panel"
+            style={{
+              marginBottom: 20,
+              padding: 20,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "flex-end",
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 950,
+                    letterSpacing: 0.7,
+                    textTransform: "uppercase",
+                    color: "#2c8fc5",
+                  }}
+                >
+                  Premieplan
+                </div>
+                <h2 style={{ margin: "5px 0 4px" }}>
+                  Fordeling av premier
+                </h2>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#617988",
+                  }}
+                >
+                  Vinnersjansen beregnes automatisk ut fra antall
+                  premier og maks antall lodd.
+                </p>
+              </div>
+
+              <div
+                style={{
+                  fontWeight: 900,
+                  color: "#143246",
+                }}
+              >
+                {campaignPlan.totalPrizes.toLocaleString("nb-NO")} premier
+                {" · "}
+                {campaignPlan.winChance.toLocaleString("nb-NO", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })} %
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit,minmax(150px,1fr))",
+                gap: 10,
+                marginTop: 16,
+              }}
+            >
+              {[
+                ["🥇 1. premie", prizeCategoryPlan.first],
+                ["🥈 2. premie", prizeCategoryPlan.second],
+                ["🥉 3. premie", prizeCategoryPlan.third],
+                ["🎁 Øvrige", prizeCategoryPlan.other],
+              ].map(([label, value]) => (
+                <div
+                  key={String(label)}
+                  style={{
+                    border: "1px solid #e0edf5",
+                    borderRadius: 14,
+                    padding: 13,
+                    background: "#f8fcff",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 900,
+                      color: "#617988",
+                    }}
+                  >
+                    {label}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 22,
+                      fontWeight: 950,
+                      color: "#143246",
+                      marginTop: 4,
+                    }}
+                  >
+                    {Number(value).toLocaleString("nb-NO")}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="adminGrid">
             <div className="panel">
               <h2>
@@ -1565,6 +1737,25 @@ export default function AdminPage() {
                   ? "Rediger premie"
                   : "Ny premie"}
               </h2>
+
+              <label>
+                Premiekategori
+
+                <select
+                  value={normalizePrizeLevel(form.level)}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      level: event.target.value,
+                    })
+                  }
+                >
+                  <option value="first">🥇 1. premie</option>
+                  <option value="second">🥈 2. premie</option>
+                  <option value="third">🥉 3. premie</option>
+                  <option value="other">🎁 Øvrig premie</option>
+                </select>
+              </label>
 
               <label>
                 Navn
@@ -1668,29 +1859,55 @@ export default function AdminPage() {
                 />
               </label>
 
-              <label>
-                Vinnersjanse i prosent
-
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  value={
-                    form.win_chance_percent
-                  }
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      win_chance_percent:
-                        Number(
-                          event.target
-                            .value,
-                        ),
-                    })
-                  }
-                />
-              </label>
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: 14,
+                  borderRadius: 14,
+                  border: "1px solid #d9eaf4",
+                  background: "#f5fafe",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 900,
+                    color: "#617988",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Automatisk vinnersjanse for denne premien
+                </div>
+                <div
+                  style={{
+                    fontSize: 20,
+                    fontWeight: 950,
+                    color: "#143246",
+                    marginTop: 4,
+                  }}
+                >
+                  {campaign && Number(campaign.max_tickets) > 0
+                    ? (
+                        (Number(form.quantity_total) /
+                          Number(campaign.max_tickets)) *
+                        100
+                      ).toLocaleString("nb-NO", {
+                        minimumFractionDigits: 3,
+                        maximumFractionDigits: 3,
+                      })
+                    : "0,000"}{" "}
+                  %
+                </div>
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: 12,
+                    color: "#617988",
+                  }}
+                >
+                  Beregnes fra antall av denne premien ÷ maks antall lodd.
+                </div>
+              </div>
 
               <label>
                 Bilde
@@ -1781,27 +1998,74 @@ export default function AdminPage() {
                   />
 
                   <div>
-                    <b>{prize.name}</b>
-
-                    {prize.is_consolation && (
-                      <span>
-                        {" "}
-                        · Trøstepremie
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <b>{prize.name}</b>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          padding: "4px 8px",
+                          borderRadius: 999,
+                          background: "#eef8fe",
+                          color: "#256f98",
+                          fontSize: 11,
+                          fontWeight: 900,
+                        }}
+                      >
+                        {prizeLevelLabel(prize.level)}
                       </span>
-                    )}
 
-                    <br />
+                      {prize.is_consolation && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 900,
+                            color: "#7c3aed",
+                          }}
+                        >
+                          Trøstepremie
+                        </span>
+                      )}
+                    </div>
 
-                    <small>
-                      {
-                        prize.quantity_remaining
-                      }{" "}
-                      igjen ·{" "}
-                      {
-                        prize.win_chance_percent
-                      }
-                      %
-                    </small>
+                    <div
+                      style={{
+                        marginTop: 5,
+                        color: "#617988",
+                        fontSize: 12,
+                      }}
+                    >
+                      {Number(
+                        prize.quantity_total ??
+                          prize.quantity_remaining ??
+                          0,
+                      ).toLocaleString("nb-NO")} totalt
+                      {" · "}
+                      {Number(prize.quantity_remaining || 0).toLocaleString("nb-NO")} igjen
+                      {" · "}
+                      {Number(prize.value_nok || 0).toLocaleString("nb-NO")} kr/stk
+                      {" · "}
+                      {campaign && Number(campaign.max_tickets) > 0
+                        ? (
+                            (Number(
+                              prize.quantity_total ??
+                                prize.quantity_remaining ??
+                                0,
+                            ) /
+                              Number(campaign.max_tickets)) *
+                            100
+                          ).toLocaleString("nb-NO", {
+                            minimumFractionDigits: 3,
+                            maximumFractionDigits: 3,
+                          })
+                        : "0,000"} %
+                    </div>
                   </div>
 
                   <div
