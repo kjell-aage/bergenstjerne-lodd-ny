@@ -305,7 +305,10 @@ function ReturnContent() {
       )}
 
       <footer style={styles.footer}>
-        Takk for at du støtter fotballglede for alle.
+        <strong style={styles.footerTitle}>TUSEN TAKK FOR STØTTEN!</strong>
+        <span style={styles.footerText}>
+          Du er med på å skape fotballglede for alle i Bergenstjerne FK.
+        </span>
       </footer>
     </main>
   );
@@ -473,5 +476,32 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     cursor: "pointer",
   },
-  footer: { maxWidth: 760, margin: "32px auto 0", textAlign: "center", color: "#657682" },
+  footer: {
+    maxWidth: 760,
+    margin: "34px auto 0",
+    padding: "28px 20px",
+    textAlign: "center",
+    color: "white",
+    background: "linear-gradient(135deg, #0b2d42 0%, #174d6b 100%)",
+    border: "3px solid #e9c857",
+    borderRadius: 18,
+    boxShadow: "0 14px 32px rgba(20,50,70,0.22)",
+  },
+  footerTitle: {
+    display: "block",
+    color: "#f5d451",
+    fontSize: "clamp(25px, 5vw, 38px)",
+    fontWeight: 900,
+    letterSpacing: 1,
+    lineHeight: 1.1,
+    textShadow: "0 2px 0 rgba(0,0,0,0.25)",
+  },
+  footerText: {
+    display: "block",
+    marginTop: 10,
+    color: "white",
+    fontSize: "clamp(16px, 2.5vw, 20px)",
+    fontWeight: 700,
+    lineHeight: 1.4,
+  },
 };

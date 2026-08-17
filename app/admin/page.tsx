@@ -127,7 +127,7 @@ export default function AdminPage() {
     useState<CampaignMetrics | null>(null);
   const [savingCampaign, setSavingCampaign] = useState(false);
   const [campaignEditorMode, setCampaignEditorMode] =
-    useState<"new" | "edit" | null>(null);
+    useState<"new" | "edit" | "results" | null>(null);
 
   const [message, setMessage] = useState("");
 
@@ -391,6 +391,26 @@ export default function AdminPage() {
     setCampaignMetrics(result.metrics || null);
     setCampaignEditorMode("edit");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function viewCampaignResults(item: Campaign) {
+    setMessage("");
+    setCampaign(item);
+    setCampaignMetrics(item.metrics || null);
+    setCampaignEditorMode("results");
+
+    window.setTimeout(() => {
+      document
+        .getElementById("campaign-results")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }
+
+  function campaignDateLabel(value?: string | null) {
+    if (!value) return "Ikke satt";
+
+    const [year, month, day] = value.split("-");
+    return year && month && day ? `${day}.${month}.${year}` : value;
   }
 
   async function deleteCampaign(item: Campaign) {
@@ -1237,6 +1257,16 @@ export default function AdminPage() {
                               </div>
 
                               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                <button
+                                  className="small"
+                                  style={{
+                                    background: "#dff3ff",
+                                    color: "#075985",
+                                  }}
+                                  onClick={() => viewCampaignResults(item)}
+                                >
+                                  Resultater
+                                </button>
                                 <button className="small" onClick={() => editCampaign(item.id)}>
                                   Rediger
                                 </button>
@@ -1258,7 +1288,227 @@ export default function AdminPage() {
             )}
           </div>
 
-          {campaign && (
+          {campaign && campaignEditorMode === "results" && (
+            <div
+              id="campaign-results"
+              className="panel"
+              style={{
+                marginBottom: 20,
+                padding: 24,
+                scrollMarginTop: 20,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  alignItems: "flex-start",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 950,
+                      letterSpacing: 0.8,
+                      textTransform: "uppercase",
+                      color: "#2c8fc5",
+                    }}
+                  >
+                    Kampanjeresultater
+                  </div>
+                  <h2 style={{ margin: "5px 0 4px" }}>{campaign.name}</h2>
+                  <p style={{ margin: 0, color: "#617988" }}>
+                    {campaign.organization_name}
+                    {campaign.team_name ? ` · ${campaign.team_name}` : ""}
+                  </p>
+                </div>
+
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "8px 12px",
+                    borderRadius: 999,
+                    fontWeight: 900,
+                    fontSize: 13,
+                    color:
+                      campaign.status === "active"
+                        ? "#166534"
+                        : campaign.status === "ended"
+                          ? "#475569"
+                          : "#92400e",
+                    background:
+                      campaign.status === "active"
+                        ? "#dcfce7"
+                        : campaign.status === "ended"
+                          ? "#e2e8f0"
+                          : "#fef3c7",
+                  }}
+                >
+                  {campaign.status === "active"
+                    ? "Aktiv"
+                    : campaign.status === "ended"
+                      ? "Avsluttet"
+                      : "Kladd"}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit,minmax(150px,1fr))",
+                  gap: 10,
+                  marginTop: 22,
+                }}
+              >
+                {[
+                  [
+                    "Omsetning hittil",
+                    `${Number(campaignMetrics?.revenue_nok || 0).toLocaleString("nb-NO")} kr`,
+                  ],
+                  [
+                    "Solgte lodd",
+                    `${Number(campaignMetrics?.sold_tickets || 0).toLocaleString("nb-NO")} / ${Number(campaign.max_tickets || 0).toLocaleString("nb-NO")}`,
+                  ],
+                  [
+                    "Betalte kjøp",
+                    Number(campaignMetrics?.paid_orders || 0).toLocaleString("nb-NO"),
+                  ],
+                  [
+                    "Maks omsetning",
+                    `${(
+                      Number(campaign.ticket_price || 0) *
+                      Number(campaign.max_tickets || 0)
+                    ).toLocaleString("nb-NO")} kr`,
+                  ],
+                  [
+                    "Kampanjemål",
+                    `${Number(campaign.goal_amount || 0).toLocaleString("nb-NO")} kr`,
+                  ],
+                  [
+                    "Gjenstår til mål",
+                    `${Number(campaignMetrics?.goal_remaining_nok || 0).toLocaleString("nb-NO")} kr`,
+                  ],
+                ].map(([label, value]) => (
+                  <div
+                    key={String(label)}
+                    style={{
+                      background: "#f5fafe",
+                      border: "1px solid #e0edf5",
+                      borderRadius: 16,
+                      padding: 14,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 900,
+                        textTransform: "uppercase",
+                        color: "#617988",
+                      }}
+                    >
+                      {label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 20,
+                        fontWeight: 950,
+                        color: "#143246",
+                        marginTop: 5,
+                      }}
+                    >
+                      {value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div
+                style={{
+                  height: 14,
+                  background: "#dcecf5",
+                  borderRadius: 999,
+                  overflow: "hidden",
+                  marginTop: 20,
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${Math.min(
+                      100,
+                      Math.max(0, Number(campaignMetrics?.goal_percent || 0)),
+                    )}%`,
+                    background: "linear-gradient(90deg,#2c8fc5,#1f9d67)",
+                    borderRadius: 999,
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 14,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  marginTop: 10,
+                  color: "#617988",
+                  fontSize: 13,
+                  fontWeight: 800,
+                }}
+              >
+                <span>
+                  {Number(campaignMetrics?.goal_percent || 0).toLocaleString(
+                    "nb-NO",
+                    {
+                      minimumFractionDigits: 1,
+                      maximumFractionDigits: 1,
+                    },
+                  )}{" "}
+                  % av kampanjemålet
+                </span>
+                <span>
+                  {campaignDateLabel(campaign.start_date)} –{" "}
+                  {campaignDateLabel(campaign.end_date)}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  marginTop: 22,
+                }}
+              >
+                <button
+                  className="btn secondary"
+                  onClick={() => {
+                    setCampaign(null);
+                    setCampaignMetrics(null);
+                    setCampaignEditorMode(null);
+                    setMessage("");
+                  }}
+                >
+                  Lukk
+                </button>
+                <button
+                  className="btn primary"
+                  onClick={() => editCampaign(campaign.id)}
+                >
+                  Rediger kampanjen
+                </button>
+              </div>
+            </div>
+          )}
+
+          {campaign && campaignEditorMode !== "results" && (
             <div
               className="panel"
               style={{
