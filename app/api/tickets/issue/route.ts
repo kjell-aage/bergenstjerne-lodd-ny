@@ -4,7 +4,13 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 /*
-  Alle registrerte premiebilder brukes som skrapesymboler.
+  Alle aktive premiebilder brukes som skrapesymboler,
+  også når selve premien er tom.
+
+  Bare premier med beholdning kan vinnes. En tom, men aktiv
+  premie kan derfor vises én eller to ganger for spenning,
+  men aldri tre ganger. Deaktiverte premier vises ikke.
+
   Den ekte fotballen brukes som eneste reservesymbol.
   Ingen emoji eller kunstige symboler.
 */
@@ -171,40 +177,46 @@ export async function POST(req: Request) {
     }
 
     /*
-      Hent aktive premier som fortsatt finnes på lager.
+      Hent alle aktive premier. Også tomme, aktive premier
+      beholdes som spenningssymboler på loddene.
     */
     const { data: prizes, error: prizesError } =
       await db
         .from("prizes")
         .select("*")
         .eq("active", true)
-        .gt("quantity_remaining", 0)
         .order("sort_order");
 
     if (prizesError) {
       throw prizesError;
     }
 
-    const allPrizes = prizes || [];
+    const allActivePrizes = prizes || [];
+
+    /*
+      Bare premier som faktisk finnes på lager kan vinnes.
+    */
+    const winnablePrizes = allActivePrizes.filter(
+      (prize: any) => Number(prize.quantity_remaining) > 0,
+    );
 
     const consolation =
-      allPrizes.find(
-        (prize: any) =>
-          prize.is_consolation &&
-          Number(prize.quantity_remaining) > 0,
+      winnablePrizes.find(
+        (prize: any) => prize.is_consolation,
       ) || null;
 
-    const regularPrizes = allPrizes.filter(
+    const regularPrizes = winnablePrizes.filter(
       (prize: any) => !prize.is_consolation,
     );
 
     /*
-      Alle aktive premielogoer kan brukes som symboler.
+      Alle aktive premielogoer kan brukes som symboler,
+      også når beholdningen er null.
 
       Premiebildene er hovedsymbolene. Den ekte fotballen
       brukes som eneste reservesymbol.
     */
-    const prizeSymbols = allPrizes
+    const prizeSymbols = allActivePrizes
       .map((prize: any) => prize.image_url)
       .filter(Boolean);
 
