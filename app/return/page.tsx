@@ -33,9 +33,17 @@ type ApiResult = {
 function ScratchTicket({
   ticket,
   number,
+  total,
+  hasNext,
+  onNext,
+  onHome,
 }: {
   ticket: Ticket;
   number: number;
+  total: number;
+  hasNext: boolean;
+  onNext: () => void;
+  onHome: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
@@ -109,7 +117,9 @@ function ScratchTicket({
     <article style={styles.ticketCard}>
       <div style={styles.ticketHeader}>
         <div>
-          <strong>Lodd {number}</strong>
+          <strong>
+            Lodd {number} av {total}
+          </strong>
           <div style={styles.ticketId}>{ticket.id}</div>
         </div>
         <span style={styles.badge}>Bergenstjerne FK</span>
@@ -150,16 +160,42 @@ function ScratchTicket({
 
       {!revealed ? (
         <button type="button" style={styles.smallButton} onClick={reveal}>
-          Vis hele loddet
+          Skrap alt
         </button>
-      ) : ticket.prize ? (
-        <div style={styles.winBox}>
-          <strong>Gratulerer! Du vant {ticket.prize.name || "en premie"}.</strong>
-          {ticket.prize.description && <p>{ticket.prize.description}</p>}
-        </div>
       ) : (
-        <div style={styles.noWinBox}>
-          Ikke gevinst denne gangen – takk for at du støtter Bergenstjerne FK!
+        <div>
+          {ticket.prize ? (
+            <div style={styles.winBox}>
+              <strong>
+                Gratulerer! Du vant {ticket.prize.name || "en premie"}.
+              </strong>
+              {ticket.prize.description && <p>{ticket.prize.description}</p>}
+            </div>
+          ) : (
+            <div style={styles.noWinBox}>
+              Ikke gevinst denne gangen – takk for at du støtter Bergenstjerne
+              FK!
+            </div>
+          )}
+
+          <div style={styles.ticketActions}>
+            {hasNext && (
+              <button
+                type="button"
+                style={styles.primaryAction}
+                onClick={onNext}
+              >
+                Neste lodd
+              </button>
+            )}
+            <button
+              type="button"
+              style={hasNext ? styles.secondaryAction : styles.primaryAction}
+              onClick={onHome}
+            >
+              Til startsiden
+            </button>
+          </div>
         </div>
       )}
     </article>
@@ -171,6 +207,7 @@ function ReturnContent() {
   const reference = searchParams.get("reference") || "";
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [activeTicketIndex, setActiveTicketIndex] = useState(0);
   const [message, setMessage] = useState("Kontrollerer betalingen hos Vipps …");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -191,6 +228,7 @@ function ReturnContent() {
     }
 
     setTickets(result.tickets || []);
+    setActiveTicketIndex(0);
     setMessage("Betalingen er godkjent. Loddene dine er klare!");
     setLoading(false);
   }, [reference]);
@@ -218,6 +256,7 @@ function ReturnContent() {
 
       if (result.status === "CAPTURED") {
         setTickets(result.tickets || []);
+        setActiveTicketIndex(0);
         setMessage("Betalingen er godkjent. Loddene dine er klare!");
         setLoading(false);
         return;
@@ -260,6 +299,19 @@ function ReturnContent() {
     setAttempt((value) => value + 1);
   }
 
+  const activeTicket = tickets[activeTicketIndex];
+
+  function showNextTicket() {
+    setActiveTicketIndex((current) =>
+      Math.min(current + 1, Math.max(tickets.length - 1, 0)),
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function goToStartPage() {
+    window.location.href = "/";
+  }
+
   return (
     <main style={styles.page}>
       <section style={styles.hero}>
@@ -296,11 +348,17 @@ function ReturnContent() {
         </section>
       )}
 
-      {tickets.length > 0 && (
+      {activeTicket && (
         <section style={styles.ticketList}>
-          {tickets.map((ticket, index) => (
-            <ScratchTicket key={ticket.id} ticket={ticket} number={index + 1} />
-          ))}
+          <ScratchTicket
+            key={activeTicket.id}
+            ticket={activeTicket}
+            number={activeTicketIndex + 1}
+            total={tickets.length}
+            hasNext={activeTicketIndex < tickets.length - 1}
+            onNext={showNextTicket}
+            onHome={goToStartPage}
+          />
         </section>
       )}
 
@@ -333,7 +391,7 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: "100vh",
     background: "linear-gradient(180deg, #eef7fb 0%, #ffffff 55%)",
     color: "#143246",
-    padding: "32px 16px 56px",
+    padding: "32px 10px 56px",
     fontFamily: "Arial, Helvetica, sans-serif",
   },
   hero: { maxWidth: 760, margin: "0 auto 28px", textAlign: "center" },
@@ -364,7 +422,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #dfe9ee",
     borderRadius: 20,
-    padding: 18,
+    padding: 14,
     boxShadow: "0 12px 30px rgba(20,50,70,0.10)",
   },
   ticketHeader: {
@@ -427,10 +485,12 @@ const styles: Record<string, React.CSSProperties> = {
   smallButton: {
     display: "block",
     margin: "0 auto",
-    border: 0,
-    background: "transparent",
+    padding: "10px 18px",
+    border: "1px solid #cfe0e8",
+    borderRadius: 999,
+    background: "#eef5f7",
     color: "#143246",
-    textDecoration: "underline",
+    fontWeight: 800,
     cursor: "pointer",
   },
   winBox: {
@@ -447,6 +507,31 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 12,
     background: "#eef5f7",
     textAlign: "center",
+  },
+  ticketActions: {
+    display: "flex",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 16,
+  },
+  primaryAction: {
+    padding: "12px 20px",
+    border: "1px solid #143246",
+    borderRadius: 10,
+    background: "#143246",
+    color: "white",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  secondaryAction: {
+    padding: "12px 20px",
+    border: "1px solid #cfe0e8",
+    borderRadius: 10,
+    background: "#eef5f7",
+    color: "#143246",
+    fontWeight: 800,
+    cursor: "pointer",
   },
   errorBox: {
     maxWidth: 620,
