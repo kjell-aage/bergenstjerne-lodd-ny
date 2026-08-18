@@ -391,7 +391,7 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: "100vh",
     background: "linear-gradient(180deg, #eef7fb 0%, #ffffff 55%)",
     color: "#143246",
-    padding: "32px 10px 56px",
+    padding: "32px 6px 56px",
     fontFamily: "Arial, Helvetica, sans-serif",
   },
   hero: { maxWidth: 760, margin: "0 auto 28px", textAlign: "center" },
@@ -422,7 +422,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#ffffff",
     border: "1px solid #dfe9ee",
     borderRadius: 20,
-    padding: 14,
+    padding: 10,
     boxShadow: "0 12px 30px rgba(20,50,70,0.10)",
   },
   ticketHeader: {
