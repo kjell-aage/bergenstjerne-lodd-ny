@@ -388,13 +388,14 @@ export default function ReturnPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
+    display: "block",
     minHeight: "100vh",
     background: "linear-gradient(180deg, #eef7fb 0%, #ffffff 55%)",
     color: "#143246",
     padding: "32px 6px 56px",
     fontFamily: "Arial, Helvetica, sans-serif",
   },
-  hero: { maxWidth: 760, margin: "0 auto 28px", textAlign: "center" },
+  hero: { maxWidth: 760, margin: "0 auto 14px", textAlign: "center" },
   logo: {
     display: "block",
     width: 92,
@@ -563,7 +564,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   footer: {
     maxWidth: 760,
-    margin: "34px auto 0",
+    margin: "18px auto 0",
     padding: "28px 20px",
     textAlign: "center",
     color: "white",
